@@ -154,6 +154,22 @@
 </head>
 <body>
 
+<!-- ===== PASSWORD SCREEN ===== -->
+<div id="password-screen">
+    <div class="pw-card">
+        <div style="font-size:36px;margin-bottom:12px">🔒</div>
+        <h4>bonnae</h4>
+        <p>재고 관리 시스템</p>
+        <input type="password" class="form-control text-center" id="pw-input"
+            placeholder="비밀번호 입력" style="font-size:16px;letter-spacing:3px"
+            onkeydown="if(event.key==='Enter')checkPassword()">
+        <div id="pw-error"></div>
+        <button class="btn btn-accent w-100 mt-3" onclick="checkPassword()" style="height:44px;font-size:15px">
+            입장
+        </button>
+    </div>
+</div>
+
 <!-- ===== SETUP SCREEN ===== -->
 <div id="setup-screen">
     <div class="setup-card">
@@ -268,6 +284,9 @@
     </nav>
     <div class="sidebar-footer">
         <small style="color:rgba(255,255,255,0.3)">실시간 동기화 켜짐</small>
+        <button onclick="lockApp()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;margin-top:8px;display:block;padding:0">
+            <i class="fas fa-lock me-1"></i>잠금
+        </button>
     </div>
 </aside>
 
@@ -2570,6 +2589,41 @@ async function saveCafe24() {
     const msg = document.getElementById('cafe24-msg');
     msg.textContent = '✅ 저장됐어요';
     setTimeout(() => msg.textContent='', 2500);
+}
+
+// =====================
+// =====================
+// PASSWORD GUARD
+// =====================
+const APP_PASSWORD = 'bonnae2026'; // ← 비밀번호 변경 시 여기를 수정하세요
+const LS_AUTH = 'bonnae_auth';
+
+function checkPassword() {
+    const input = document.getElementById('pw-input').value;
+    if (input === APP_PASSWORD) {
+        localStorage.setItem(LS_AUTH, 'true');
+        document.getElementById('password-screen').style.display = 'none';
+        document.getElementById('pw-input').value = '';
+    } else {
+        const err = document.getElementById('pw-error');
+        err.textContent = '비밀번호가 틀렸어요';
+        document.getElementById('pw-input').value = '';
+        document.getElementById('pw-input').focus();
+        setTimeout(() => { err.textContent = ''; }, 2500);
+    }
+}
+
+function lockApp() {
+    localStorage.removeItem(LS_AUTH);
+    document.getElementById('password-screen').style.display = 'flex';
+    setTimeout(() => document.getElementById('pw-input').focus(), 100);
+}
+
+// 이미 인증된 경우 바로 통과
+if (localStorage.getItem(LS_AUTH) === 'true') {
+    document.getElementById('password-screen').style.display = 'none';
+} else {
+    setTimeout(() => document.getElementById('pw-input')?.focus(), 100);
 }
 
 // =====================
