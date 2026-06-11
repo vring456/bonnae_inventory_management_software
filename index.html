@@ -643,9 +643,9 @@
             <div class="modal-header"><h5 class="modal-title fw-bold">상품 추가</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <div class="row mb-3">
-                    <div class="col-md-4"><label class="form-label">상품명 *</label><input type="text" class="form-control" id="new-product-name" placeholder="예: Corset mini dress"></div>
-                    <div class="col-md-4"><label class="form-label">시즌</label><input type="text" class="form-control" id="new-product-season" placeholder="예: 26 HS"></div>
-                    <div class="col-md-4"><label class="form-label">SKU 코드</label><input type="text" class="form-control" id="new-product-sku" placeholder="예: 26HS-CORSETMD"></div>
+                    <div class="col-md-4"><label class="form-label">상품명 *</label><input type="text" class="form-control" id="new-product-name" placeholder="예: Corset mini dress" oninput="autoFillSku()"></div>
+                    <div class="col-md-4"><label class="form-label">시즌</label><input type="text" class="form-control" id="new-product-season" placeholder="예: 26 HS" oninput="autoFillSku()"></div>
+                    <div class="col-md-4"><label class="form-label">SKU 코드 <span style="font-size:11px;color:#a1a1aa;font-weight:400">자동생성</span></label><input type="text" class="form-control" id="new-product-sku" placeholder="상품명 입력 시 자동 생성" oninput="_skuAutoMode=false"></div>
                 </div>
                 <hr>
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1394,8 +1394,26 @@ async function deleteVariant(variantId) {
     showToast(`${vari.color}/${vari.size} 옵션 삭제됐어요`);
 }
 
+// SKU 자동 생성
+let _skuAutoMode = true;
+
+function generateSkuFromName(name, season) {
+    const seasonCode = (season || '').replace(/\s+/g, '').toUpperCase();       // "26 SS" → "26SS"
+    const nameCode   = (name  || '').replace(/\s+/g, '').toUpperCase().slice(0, 10); // "Dusty dot zi..." → "DUSTYDOTZI"
+    if (!nameCode) return '';
+    return seasonCode ? `${seasonCode}-${nameCode}` : nameCode;
+}
+
+function autoFillSku() {
+    if (!_skuAutoMode) return;
+    const name   = document.getElementById('new-product-name').value.trim();
+    const season = document.getElementById('new-product-season').value.trim();
+    document.getElementById('new-product-sku').value = generateSkuFromName(name, season);
+}
+
 document.getElementById('addProductModal').addEventListener('show.bs.modal', () => {
     document.getElementById('variant-rows').innerHTML = '';
+    _skuAutoMode = true;
     addVariantRow();
 });
 
