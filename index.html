@@ -1972,17 +1972,33 @@ function parseKreamSize(optionStr) {
 
 async function applyKreamDirect(rows) {
     const today = new Date().toISOString().split('T')[0];
-    let matched = 0;
+    let matched = 0, skipped = 0;
     const unmatched = [];
     const variantDelta = {};
     const orderInserts = [];
 
+    // 중복 체크
+    const extIds = rows.map(row => {
+        const orderNum = String(row['주문번호'] || row['거래번호'] || row['주문 번호'] || '').trim();
+        const pName    = String(row['상품명'] || row['한글 상품명'] || '').trim();
+        return orderNum ? `kream:${orderNum}:${pName}:${String(row['옵션']||'').trim()}` : null;
+    }).filter(Boolean);
+    let existingSet = new Set();
+    if (extIds.length > 0) {
+        const { data } = await sb.from('orders').select('external_order_id').in('external_order_id', extIds);
+        existingSet = new Set((data || []).map(r => r.external_order_id));
+    }
+
     rows.forEach(row => {
-        const sku   = String(row['모델품번'] || '').trim();
-        const pName = String(row['상품명'] || row['한글 상품명'] || '').trim();
-        const size  = parseKreamSize(row['옵션']);
-        const qty   = parseInt(row['수량']) || 0;
+        const sku    = String(row['모델품번'] || '').trim();
+        const pName  = String(row['상품명'] || row['한글 상품명'] || '').trim();
+        const size   = parseKreamSize(row['옵션']);
+        const qty    = parseInt(row['수량']) || 0;
         if (!pName || qty <= 0) return;
+
+        const orderNum = String(row['주문번호'] || row['거래번호'] || row['주문 번호'] || '').trim();
+        const orderId  = orderNum ? `kream:${orderNum}:${pName}:${String(row['옵션']||'').trim()}` : null;
+        if (orderId && existingSet.has(orderId)) { skipped++; return; }
 
         let prod = sku ? _products.find(p => p.sku && p.sku === sku) : null;
         if (!prod) prod = _products.find(p =>
@@ -1998,10 +2014,14 @@ async function applyKreamDirect(rows) {
         if (!vari) { unmatched.push(`${pName} (사이즈:${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
-        orderInserts.push({ date: today, platform: '크림', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '크림 엑셀 업로드' });
+        orderInserts.push({ date: today, platform: '크림', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '크림 엑셀 업로드', external_order_id: orderId });
         matched++;
     });
 
+    if (skipped > 0 && matched === 0) {
+        showToast(`⚠️ 전체 ${skipped}건이 이미 처리된 주문입니다.`, 'warning'); return;
+    }
+    if (skipped > 0) showToast(`ℹ️ 중복 ${skipped}건 건너뜀`, 'info');
     await _flushOrders(variantDelta, orderInserts, matched, unmatched, '크림');
 }
 
@@ -2034,19 +2054,33 @@ function parseSampleasRow(row) {
         if (cm) color = cm[1].trim();
         if (sm) size  = sm[1].trim();
     }
-    return { cleanName, color, size, qty };
+
+    // 중복 방지용 고유 ID
+    const orderNum = String(row['주문번호'] || '').trim();
+    const orderId  = orderNum ? `sampleas:${orderNum}:${full}` : null;
+
+    return { cleanName, color, size, qty, orderId };
 }
 
 async function applySampleasDirect(rows) {
     const today = new Date().toISOString().split('T')[0];
-    let matched = 0;
+    let matched = 0, skipped = 0;
     const unmatched = [];
     const variantDelta = {};
     const orderInserts = [];
 
-    rows.forEach(row => {
-        const { cleanName, color, size, qty } = parseSampleasRow(row);
+    // 중복 체크
+    const parsedRows = rows.map(row => parseSampleasRow(row));
+    const extIds = parsedRows.map(p => p.orderId).filter(Boolean);
+    let existingSet = new Set();
+    if (extIds.length > 0) {
+        const { data } = await sb.from('orders').select('external_order_id').in('external_order_id', extIds);
+        existingSet = new Set((data || []).map(r => r.external_order_id));
+    }
+
+    parsedRows.forEach(({ cleanName, color, size, qty, orderId }) => {
         if (!cleanName || qty <= 0) return;
+        if (orderId && existingSet.has(orderId)) { skipped++; return; }
 
         const prod = _products.find(p =>
             p.name.toLowerCase().includes(cleanName.toLowerCase()) ||
@@ -2066,10 +2100,14 @@ async function applySampleasDirect(rows) {
         if (!vari) { unmatched.push(`${cleanName}(${color}/${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
-        orderInserts.push({ date: today, platform: '샘플라스', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '샘플라스 엑셀 업로드' });
+        orderInserts.push({ date: today, platform: '샘플라스', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '샘플라스 엑셀 업로드', external_order_id: orderId });
         matched++;
     });
 
+    if (skipped > 0 && matched === 0) {
+        showToast(`⚠️ 전체 ${skipped}건이 이미 처리된 주문입니다.`, 'warning'); return;
+    }
+    if (skipped > 0) showToast(`ℹ️ 중복 ${skipped}건 건너뜀`, 'info');
     await _flushOrders(variantDelta, orderInserts, matched, unmatched, '샘플라스');
 }
 
@@ -2097,19 +2135,32 @@ function parseCafe24Row(row) {
     const sizeMatch = String(row['옵션'] || '').match(/Size\s*=\s*(\S+)/i);
     const size = sizeMatch ? sizeMatch[1].trim() : '1';
 
-    return { full, baseName, color, size, qty };
+    // 중복 방지용 고유 ID
+    const orderNum = String(row['주문번호'] || '').trim();
+    const orderId  = orderNum ? `cafe24:${orderNum}:${full}:${String(row['옵션']||'').trim()}` : null;
+
+    return { full, baseName, color, size, qty, orderId };
 }
 
 async function applyCafe24Direct(rows) {
     const today = new Date().toISOString().split('T')[0];
-    let matched = 0;
+    let matched = 0, skipped = 0;
     const unmatched = [];
     const variantDelta = {};
     const orderInserts = [];
 
-    rows.forEach(row => {
-        const { full, baseName, color, size, qty } = parseCafe24Row(row);
+    // 중복 체크
+    const parsedRows = rows.map(row => parseCafe24Row(row));
+    const extIds = parsedRows.map(p => p.orderId).filter(Boolean);
+    let existingSet = new Set();
+    if (extIds.length > 0) {
+        const { data } = await sb.from('orders').select('external_order_id').in('external_order_id', extIds);
+        existingSet = new Set((data || []).map(r => r.external_order_id));
+    }
+
+    parsedRows.forEach(({ full, baseName, color, size, qty, orderId }) => {
         if (!full || qty <= 0) return;
+        if (orderId && existingSet.has(orderId)) { skipped++; return; }
 
         let prod = _products.find(p =>
             p.name.toLowerCase().includes(baseName.toLowerCase()) ||
@@ -2130,10 +2181,14 @@ async function applyCafe24Direct(rows) {
         if (!vari) { unmatched.push(`${full}(${color}/${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
-        orderInserts.push({ date: today, platform: '카페24', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '카페24 CSV 업로드' });
+        orderInserts.push({ date: today, platform: '카페24', product_id: prod.id, variant_id: vari.id, quantity: qty, type: 'sale', memo: '카페24 CSV 업로드', external_order_id: orderId });
         matched++;
     });
 
+    if (skipped > 0 && matched === 0) {
+        showToast(`⚠️ 전체 ${skipped}건이 이미 처리된 주문입니다.`, 'warning'); return;
+    }
+    if (skipped > 0) showToast(`ℹ️ 중복 ${skipped}건 건너뜀`, 'info');
     await _flushOrders(variantDelta, orderInserts, matched, unmatched, '카페24');
 }
 
