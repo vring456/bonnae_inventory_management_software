@@ -1074,6 +1074,7 @@ function renderProducts() {
     let prods = _products;
     if (seasonF) prods = prods.filter(p => p.season === seasonF);
     if (searchQ) prods = prods.filter(p => p.name.toLowerCase().includes(searchQ));
+    prods = prods.slice().sort((a, b) => a.name.localeCompare(b.name));
 
     if (prods.length === 0) {
         el.innerHTML = '<div class="empty-state"><i class="fas fa-shirt"></i>등록된 상품이 없어요</div>';
@@ -1500,24 +1501,51 @@ function loadReturnBatches() {
     const sel = document.getElementById('return-batch-select');
     if (!sel) return;
 
-    // 취소되지 않은 sponsor_out 이력이 있는 배치만 (취소된 항목은 카운트 제외)
+    // sponsor_out 묶음별 출고 수량 집계 (variant별)
     const batchMap = {};
     _orders.forEach(o => {
-        if (o.batch_id && o.type === 'sponsor_out') {
+        if (o.batch_id && o.type === 'sponsor_out' && o.type !== 'cancel') {
             if (!batchMap[o.batch_id]) {
-                batchMap[o.batch_id] = { batch_id: o.batch_id, batch_name: o.batch_name || o.batch_id, date: o.date, count: 0 };
+                batchMap[o.batch_id] = { batch_id: o.batch_id, batch_name: o.batch_name || o.batch_id, date: o.date, outQty: {} };
             }
-            if (o.status !== 'cancelled') {
-                batchMap[o.batch_id].count++;
-            }
+            const vid = o.variant_id;
+            batchMap[o.batch_id].outQty[vid] = (batchMap[o.batch_id].outQty[vid] || 0) + (o.quantity || 0);
         }
     });
-    // 실제 활성 항목이 0인 배치는 제외
-    Object.keys(batchMap).forEach(bid => { if (batchMap[bid].count === 0) delete batchMap[bid]; });
 
-    const batches = Object.values(batchMap).sort((a,b) => b.date.localeCompare(a.date));
+    // sponsor_in에서 source_batch_id로 회수 수량 집계
+    const returnedQtyMap = {}; // batch_id → { variant_id → returnedQty }
+    _orders.forEach(o => {
+        if (o.source_batch_id && o.type === 'sponsor_in') {
+            if (!returnedQtyMap[o.source_batch_id]) returnedQtyMap[o.source_batch_id] = {};
+            const vid = o.variant_id;
+            returnedQtyMap[o.source_batch_id][vid] = (returnedQtyMap[o.source_batch_id][vid] || 0) + (o.quantity || 0);
+        }
+    });
+
+    // 잔여 수량 계산 → 항목 수 & 완전회수 여부
+    const batches = Object.values(batchMap).map(b => {
+        const returned = returnedQtyMap[b.batch_id] || {};
+        let remaining = 0;
+        for (const [vid, qty] of Object.entries(b.outQty)) {
+            const ret = returned[vid] || 0;
+            if (qty - ret > 0) remaining++;
+        }
+        const total = Object.keys(b.outQty).length;
+        const fullyReturned = remaining === 0;
+        return { ...b, remaining, total, fullyReturned };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+
     sel.innerHTML = '<option value="">선택하세요...</option>' +
-        batches.map(b => `<option value="${b.batch_id}">${b.batch_name}  (${b.date} · ${b.count}품목)</option>`).join('');
+        batches.map(b => {
+            if (b.fullyReturned) {
+                return `<option value="${b.batch_id}" disabled style="color:#a1a1aa">✅ ${b.batch_name}  (${b.date} · 전체 회수완료)</option>`;
+            }
+            const label = b.remaining < b.total
+                ? `${b.batch_name}  (${b.date} · ${b.remaining}/${b.total}품목 미회수)`
+                : `${b.batch_name}  (${b.date} · ${b.remaining}품목)`;
+            return `<option value="${b.batch_id}">${label}</option>`;
+        }).join('');
 
     document.getElementById('return-items').innerHTML =
         '<div class="text-muted small text-center py-3">위에서 협찬 묶음을 선택하면 출고 내역이 표시돼요</div>';
@@ -1537,6 +1565,26 @@ function onBatchReturnSelect() {
         return;
     }
 
+    // variant별 이미 회수된 수량 계산
+    const returnedQty = {};
+    _orders.forEach(o => {
+        if (o.source_batch_id === batchId && o.type === 'sponsor_in') {
+            returnedQty[o.variant_id] = (returnedQty[o.variant_id] || 0) + (o.quantity || 0);
+        }
+    });
+
+    // 잔여 있는 항목만 표시
+    const activeOrders = batchOrders.map(o => ({
+        ...o,
+        alreadyReturned: returnedQty[o.variant_id] || 0,
+        remaining: (o.quantity || 0) - (returnedQty[o.variant_id] || 0)
+    })).filter(o => o.remaining > 0);
+
+    if (activeOrders.length === 0) {
+        container.innerHTML = '<div class="text-muted small p-3">모든 항목이 이미 회수됐어요.</div>';
+        return;
+    }
+
     // 전체 선택 버튼
     let html = `<div class="d-flex justify-content-between align-items-center mb-2">
         <div style="font-size:13px;font-weight:600;color:#52525b">반환할 항목 선택</div>
@@ -1546,9 +1594,11 @@ function onBatchReturnSelect() {
         </div>
     </div>`;
 
-    batchOrders.forEach(o => {
+    activeOrders.forEach(o => {
         const prod = _products.find(p => p.id === o.product_id);
         const vari = _variants.find(v => v.id === o.variant_id);
+        const partialLabel = o.alreadyReturned > 0
+            ? `<span style="font-size:11px;color:#f59e0b">  (이미 ${o.alreadyReturned}개 회수됨)</span>` : '';
         html += `<div class="d-flex align-items-center gap-3 p-2 mb-2 rounded"
             style="background:#fdf4ff;border:1px solid #e9d5ff">
             <input type="checkbox" class="return-check" data-order-id="${o.id}"
@@ -1556,14 +1606,14 @@ function onBatchReturnSelect() {
                 checked style="width:18px;height:18px;cursor:pointer;flex-shrink:0"
                 onchange="toggleReturnRow(this,'${o.id}')">
             <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prod?.name||'삭제됨'}</div>
+                <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prod?.name||'삭제됨'}${partialLabel}</div>
                 <div style="font-size:12px;color:#71717a">${vari?vari.color+' / '+vari.size:'—'}</div>
             </div>
             <div style="font-size:12px;color:#8b5cf6;white-space:nowrap">출고 ${o.quantity}개</div>
             <div class="d-flex align-items-center gap-1" id="rqty-wrap-${o.id}">
                 <span style="font-size:12px;color:#52525b">회수</span>
                 <input type="number" class="form-control form-control-sm"
-                    id="rqty-${o.id}" value="${o.quantity}" min="1" max="${o.quantity}"
+                    id="rqty-${o.id}" value="${o.remaining}" min="1" max="${o.remaining}"
                     style="width:68px;text-align:center">
                 <span style="font-size:12px;color:#a1a1aa">개</span>
             </div>
@@ -1616,7 +1666,8 @@ async function submitBatchReturn() {
             product_id: cb.dataset.productId, variant_id: variantId,
             quantity: qty, type: 'sponsor_in',
             memo: returnBatchName,
-            batch_id: returnBatchId, batch_name: returnBatchName
+            batch_id: returnBatchId, batch_name: returnBatchName,
+            source_batch_id: batchId
         });
     });
 
@@ -1698,6 +1749,7 @@ function filterBatchSuggestions(rowId) {
     const q = input.value.toLowerCase().trim();
     let matches = _products;
     if (q) matches = _products.filter(p => p.name.toLowerCase().includes(q) || (p.season||'').toLowerCase().includes(q));
+    matches = matches.slice().sort((a, b) => a.name.localeCompare(b.name));
     if (matches.length === 0) { sugg.style.display = 'none'; return; }
     sugg.innerHTML = matches.slice(0, 10).map(p => {
         const hl = q ? p.name.replace(new RegExp(`(${q})`, 'gi'), '<mark style="background:#ede9fe;padding:0;border-radius:2px">$1</mark>') : p.name;
@@ -1717,12 +1769,18 @@ function selectBatchProduct(rowId, productId, productName) {
     if (sugg)  sugg.style.display = 'none';
     if (varSel) {
         varSel.innerHTML = '';
-        _variants.filter(v => v.product_id === productId).forEach(v => {
-            const o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = `${v.color} / ${v.size}  (샘플재고: ${v.sample_stock||0}개)`;
-            varSel.appendChild(o);
-        });
+        _variants.filter(v => v.product_id === productId)
+            .sort((a, b) => {
+                const cc = a.color.localeCompare(b.color);
+                if (cc !== 0) return cc;
+                return (parseInt(a.size) || 0) - (parseInt(b.size) || 0) || a.size.localeCompare(b.size);
+            })
+            .forEach(v => {
+                const o = document.createElement('option');
+                o.value = v.id;
+                o.textContent = `${v.color} / ${v.size}  (샘플재고: ${v.sample_stock||0}개)`;
+                varSel.appendChild(o);
+            });
     }
 }
 
@@ -1849,6 +1907,7 @@ function filterProductSuggestions() {
     if (q) matches = _products.filter(p =>
         p.name.toLowerCase().includes(q) || (p.season && p.season.toLowerCase().includes(q))
     );
+    matches = matches.slice().sort((a, b) => a.name.localeCompare(b.name));
 
     if (matches.length === 0) { el.style.display = 'none'; return; }
 
@@ -1889,14 +1948,20 @@ function updateVariantOptions() {
     const sel = document.getElementById('manual-variant');
     sel.innerHTML = '';
     if (!pid) { sel.innerHTML = '<option>먼저 상품을 선택하세요</option>'; return; }
-    _variants.filter(v => v.product_id === pid).forEach(v => {
-        const o = document.createElement('option');
-        o.value = v.id;
-        const stockToShow = isSample ? (v.sample_stock || 0) : isB ? (v.b_stock || 0) : v.stock;
-        const stockLabel  = isSample ? '샘플재고' : isB ? 'B급재고' : '재고';
-        o.textContent = `${v.color} / ${v.size}  (${stockLabel}: ${stockToShow}개)`;
-        sel.appendChild(o);
-    });
+    _variants.filter(v => v.product_id === pid)
+        .sort((a, b) => {
+            const cc = a.color.localeCompare(b.color);
+            if (cc !== 0) return cc;
+            return (parseInt(a.size) || 0) - (parseInt(b.size) || 0) || a.size.localeCompare(b.size);
+        })
+        .forEach(v => {
+            const o = document.createElement('option');
+            o.value = v.id;
+            const stockToShow = isSample ? (v.sample_stock || 0) : isB ? (v.b_stock || 0) : v.stock;
+            const stockLabel  = isSample ? '샘플재고' : isB ? 'B급재고' : '재고';
+            o.textContent = `${v.color} / ${v.size}  (${stockLabel}: ${stockToShow}개)`;
+            sel.appendChild(o);
+        });
 }
 
 async function submitManualOrder() {
@@ -1926,12 +1991,13 @@ async function submitManualOrder() {
     hideLoading();
     if (ve || oe) { showToast('오류가 발생했어요', 'danger'); return; }
 
-    // Update local immediately
     vari[stockField] = newStock;
+    await refreshOrders();
     updateVariantOptions();
     const stockLabel = stockField === 'sample_stock' ? '샘플재고' : stockField === 'b_stock' ? 'B급재고' : '재고';
     showToast(`반영 완료! 현재 ${stockLabel}: ${newStock}개`);
     renderDashboard();
+    renderHistory();
 }
 
 // =====================
@@ -2233,6 +2299,7 @@ async function _flushOrders(variantDelta, orderInserts, matched, unmatched, plat
         ...variantUpdates,
         orderInserts.length > 0 ? sb.from('orders').insert(orderInserts) : Promise.resolve()
     ]);
+    await refreshOrders();
     hideLoading();
 
     const uniq = [...new Set(unmatched)];
@@ -2349,6 +2416,7 @@ async function applyExcelMapping() {
         ...variantUpdates,
         orderInserts.length > 0 ? sb.from('orders').insert(orderInserts) : Promise.resolve()
     ]);
+    await refreshOrders();
     hideLoading();
 
     const msg = unmatched.length > 0
