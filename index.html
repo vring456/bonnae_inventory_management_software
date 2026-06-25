@@ -1513,14 +1513,22 @@ function loadReturnBatches() {
         }
     });
 
-    // sponsor_in에서 source_batch_id로 회수 수량 집계
+    // sponsor_in에서 회수 수량 집계 (source_batch_id 신규 + 메모 기반 레거시 fallback)
     const returnedQtyMap = {}; // batch_id → { variant_id → returnedQty }
     _orders.forEach(o => {
-        if (o.source_batch_id && o.type === 'sponsor_in') {
-            if (!returnedQtyMap[o.source_batch_id]) returnedQtyMap[o.source_batch_id] = {};
-            const vid = o.variant_id;
-            returnedQtyMap[o.source_batch_id][vid] = (returnedQtyMap[o.source_batch_id][vid] || 0) + (o.quantity || 0);
+        if (o.type !== 'sponsor_in') return;
+        let matchedBatchId = null;
+        if (o.source_batch_id) {
+            matchedBatchId = o.source_batch_id;
+        } else if (o.memo) {
+            // 레거시: 메모가 "[원본배치명] 회수"로 시작하는 경우
+            const matchedBatch = Object.values(batchMap).find(b => o.memo.startsWith(b.batch_name + ' 회수'));
+            if (matchedBatch) matchedBatchId = matchedBatch.batch_id;
         }
+        if (!matchedBatchId) return;
+        if (!returnedQtyMap[matchedBatchId]) returnedQtyMap[matchedBatchId] = {};
+        const vid = o.variant_id;
+        returnedQtyMap[matchedBatchId][vid] = (returnedQtyMap[matchedBatchId][vid] || 0) + (o.quantity || 0);
     });
 
     // 잔여 수량 계산 → 항목 수 & 완전회수 여부
@@ -1565,10 +1573,14 @@ function onBatchReturnSelect() {
         return;
     }
 
-    // variant별 이미 회수된 수량 계산
+    // variant별 이미 회수된 수량 계산 (source_batch_id 신규 + 메모 기반 레거시 fallback)
+    const batchName = batchOrders[0]?.batch_name || '';
     const returnedQty = {};
     _orders.forEach(o => {
-        if (o.source_batch_id === batchId && o.type === 'sponsor_in') {
+        if (o.type !== 'sponsor_in') return;
+        const isReturn = o.source_batch_id === batchId ||
+            (!o.source_batch_id && batchName && o.memo && o.memo.startsWith(batchName + ' 회수'));
+        if (isReturn) {
             returnedQty[o.variant_id] = (returnedQty[o.variant_id] || 0) + (o.quantity || 0);
         }
     });
@@ -1597,6 +1609,7 @@ function onBatchReturnSelect() {
     activeOrders.forEach(o => {
         const prod = _products.find(p => p.id === o.product_id);
         const vari = _variants.find(v => v.id === o.variant_id);
+        const sampleStock = vari ? (vari.sample_stock || 0) : 0;
         const partialLabel = o.alreadyReturned > 0
             ? `<span style="font-size:11px;color:#f59e0b">  (이미 ${o.alreadyReturned}개 회수됨)</span>` : '';
         html += `<div class="d-flex align-items-center gap-3 p-2 mb-2 rounded"
@@ -1610,6 +1623,7 @@ function onBatchReturnSelect() {
                 <div style="font-size:12px;color:#71717a">${vari?vari.color+' / '+vari.size:'—'}</div>
             </div>
             <div style="font-size:12px;color:#8b5cf6;white-space:nowrap">출고 ${o.quantity}개</div>
+            <div style="font-size:11px;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:6px;white-space:nowrap">샘플재고 ${sampleStock}개</div>
             <div class="d-flex align-items-center gap-1" id="rqty-wrap-${o.id}">
                 <span style="font-size:12px;color:#52525b">회수</span>
                 <input type="number" class="form-control form-control-sm"
