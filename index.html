@@ -371,6 +371,7 @@
                 <option value="low">⚠️ 부족 (1~5개)</option>
                 <option value="zero">🚫 품절 (0개)</option>
                 <option value="minus">🔴 마이너스 (0 미만)</option>
+                <option value="sample-zero">🟣 샘플재고 부족 (1개 미만)</option>
             </select>
         </div>
         <div class="card-box">
@@ -1086,10 +1087,11 @@ function renderProducts() {
     prods.forEach(prod => {
         let pvariants = _variants.filter(v => v.product_id === prod.id);
         if (colorF) pvariants = pvariants.filter(v => v.color === colorF);
-        if (statusF === 'ok')    pvariants = pvariants.filter(v => v.stock > 5);
-        if (statusF === 'low')   pvariants = pvariants.filter(v => v.stock > 0 && v.stock <= 5);
-        if (statusF === 'zero')  pvariants = pvariants.filter(v => v.stock === 0);
-        if (statusF === 'minus') pvariants = pvariants.filter(v => v.stock < 0);
+        if (statusF === 'ok')          pvariants = pvariants.filter(v => v.stock > 5);
+        if (statusF === 'low')         pvariants = pvariants.filter(v => v.stock > 0 && v.stock <= 5);
+        if (statusF === 'zero')        pvariants = pvariants.filter(v => v.stock === 0);
+        if (statusF === 'minus')       pvariants = pvariants.filter(v => v.stock < 0);
+        if (statusF === 'sample-zero') pvariants = pvariants.filter(v => (v.sample_stock || 0) < 1);
 
         if (pvariants.length === 0) return;
 
