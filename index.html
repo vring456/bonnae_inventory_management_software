@@ -96,6 +96,8 @@
         }
         .platform-tab:hover { border-color: var(--accent); color: var(--accent); }
         .platform-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .sponsor-tab:hover { border-color: #8b5cf6; color: #8b5cf6; }
+        .sponsor-tab.active { background: #8b5cf6; border-color: #8b5cf6; }
 
         .variant-row {
             background: #fafafa; border: 1px solid #e4e4e7; border-radius: 8px;
@@ -491,13 +493,9 @@
     <div id="sponsor" class="page">
         <div class="page-title" style="color:#8b5cf6">협찬 관리</div>
         <!-- 서브탭 -->
-        <div class="d-flex gap-2 mb-4">
-            <button id="stab-out" onclick="showSponsorSubtab('out')"
-                style="padding:7px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#8b5cf6;color:white;border:none;transition:all 0.15s">
-                📦 출고</button>
-            <button id="stab-in" onclick="showSponsorSubtab('in')"
-                style="padding:7px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:white;color:#8b5cf6;border:1.5px solid #8b5cf6;transition:all 0.15s">
-                🔄 회수 (반납)</button>
+        <div class="platform-tabs">
+            <button id="stab-out" class="platform-tab sponsor-tab active" onclick="showSponsorSubtab('out')">📦 출고</button>
+            <button id="stab-in" class="platform-tab sponsor-tab" onclick="showSponsorSubtab('in')">🔄 회수 (반납)</button>
         </div>
 
         <!-- 출고 -->
@@ -648,6 +646,33 @@
 </main>
 
 <!-- ADD PRODUCT MODAL -->
+<!-- 협찬 판매 모달 -->
+<div class="modal fade" id="sponsorSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#f3e8ff">
+                <h6 class="modal-title fw-bold" style="color:#8b5cf6">💰 협찬 판매 반영</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sponsor-sale-product-info" class="mb-3 p-2 rounded" style="background:#fdf4ff;font-size:13px"></div>
+                <div class="mb-3">
+                    <label class="form-label">판매 수량</label>
+                    <input type="number" class="form-control" id="sponsor-sale-qty" value="1" min="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">판매일</label>
+                    <input type="date" class="form-control" id="sponsor-sale-date">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-sm" style="background:#8b5cf6;color:white" onclick="submitSponsorSale()">판매 반영</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="addProductModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -1050,7 +1075,7 @@ function renderDashboard() {
 
     // ── KPI 카드 ──
     const pClass = {'카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas'};
-    const tl = { sale:'판매', restock:'입고', return:'반품', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_in:'협찬회수', b_sale:'B급판매', b_in:'B급입고', cancel:'취소' };
+    const tl = { sale:'판매', restock:'입고', return:'반품', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고', cancel:'취소' };
 
     document.getElementById('dash-kpi').innerHTML = `
         <div class="col-6 col-md-3">
@@ -1217,9 +1242,12 @@ function renderProducts() {
         if (statusF === 'true-soldout') pvariants = pvariants.filter(v =>
             v.stock === 0 && (_webSoldOutIds.has(prod.id) || _webSoldoutVariantIds.has(v.id))
         );
-        if (statusF === 'uncounted')    pvariants = pvariants.filter(v =>
-            v.stock === 0 && _webActiveIds.has(prod.id) && !_webSoldoutVariantIds.has(v.id)
-        );
+        if (statusF === 'uncounted') {
+            const allZero = _variants.filter(v2 => v2.product_id === prod.id).every(v2 => (v2.stock || 0) === 0);
+            pvariants = pvariants.filter(v =>
+                v.stock === 0 && allZero && !_webSoldoutVariantIds.has(v.id)
+            );
+        }
 
         if (pvariants.length === 0) return;
 
@@ -1234,11 +1262,15 @@ function renderProducts() {
             const isMinus = v.stock < 0;
             const isZero  = v.stock === 0;
 
-            // CSV 로드 시: 진짜품절 vs 재고미입력 구분
+            // CSV 로드 시: 품절 vs 재고미입력 구분
+            // 품절: out of stock 대체문구 있음
+            // 재고미입력: out of stock 없음 + 이 상품 전사이즈 재고가 모두 0
             const isWebSoldout = _webCheckedAt && (
                 _webSoldOutIds.has(prod.id) || _webSoldoutVariantIds.has(v.id)
             );
-            const isWebActive  = _webCheckedAt && _webActiveIds.has(prod.id) && !_webSoldoutVariantIds.has(v.id);
+            const allProdVariantsZero = _webCheckedAt &&
+                _variants.filter(v2 => v2.product_id === prod.id).every(v2 => (v2.stock || 0) === 0);
+            const isUncounted = _webCheckedAt && !isWebSoldout && allProdVariantsZero;
 
             let lbl, bdg, bgRow, cls;
             if (isMinus) {
@@ -1246,15 +1278,15 @@ function renderProducts() {
                 bgRow = 'background:#fdf2f8'; cls = 'stock-zero';
             } else if (isZero && _webCheckedAt) {
                 if (isWebSoldout) {
-                    // bonnae.net에서도 숨김 → 품절 확정
+                    // 판매가 대체문구 = out of stock → 품절 확정
                     lbl = '품절'; bdg = 'bg-danger';
                     bgRow = 'background:#fff0f0'; cls = 'stock-zero';
-                } else if (isWebActive) {
-                    // bonnae.net엔 아직 판매 중 → 재고 아직 안 셈
+                } else if (isUncounted) {
+                    // out of stock 아님 + 전사이즈 재고 0 → 아직 재고 안 셈
                     lbl = '재고미입력'; bdg = 'bg-warning text-dark';
                     bgRow = 'background:#fff8e1'; cls = 'stock-low';
                 } else {
-                    // CSV에 없는 상품
+                    // 이 사이즈만 품절 (다른 사이즈는 재고 있음)
                     lbl = '품절'; bdg = 'bg-secondary';
                     bgRow = 'background:#fff5f5'; cls = 'stock-zero';
                 }
@@ -1337,28 +1369,30 @@ async function handleCafe24ProductCSV(input) {
 
         const headers = _parseCSVLine(lines[0]);
         const idx = h => headers.indexOf(h);
-        const iName    = idx('상품명');
-        const iDisplay = idx('진열상태');
-        const iSale    = idx('판매상태');
-        const iOpt     = idx('옵션입력');
+        const iName       = idx('상품명');
+        const iAltTextUse = idx('판매가 대체문구 사용');
+        const iAltText    = idx('판매가 대체문구');
+        const iOpt        = idx('옵션입력');
 
         if (iName < 0) throw new Error('상품명 컬럼을 찾을 수 없어요. 카페24 상품 내보내기 CSV인지 확인해주세요.');
 
         // "Product name (Color)" → baseName="product name", color="color"
-        const byBase = new Map(); // baseName -> [{color, hidden}]
+        // oos = 판매가 대체문구가 "out of stock"인 경우 → 진짜 품절
+        const byBase = new Map(); // baseName -> [{color, oos}]
 
         for (let i = 1; i < lines.length; i++) {
             const r = _parseCSVLine(lines[i]);
             const fullName = (r[iName] || '').trim();
             if (!fullName || fullName.includes('개인결제') || fullName.startsWith('\u2714')) continue;
 
-            const isHidden = (iDisplay >= 0 && r[iDisplay] === 'N') || (iSale >= 0 && r[iSale] === 'N');
+            const isOOS = iAltTextUse >= 0 && r[iAltTextUse] === 'Y' &&
+                          iAltText >= 0 && (r[iAltText] || '').toLowerCase().includes('out of stock');
             const m = fullName.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
             const baseName = (m ? m[1] : fullName).trim().toLowerCase();
             const color    = (m ? m[2] : '').trim().toLowerCase();
 
             if (!byBase.has(baseName)) byBase.set(baseName, []);
-            byBase.get(baseName).push({ color, hidden: isHidden });
+            byBase.get(baseName).push({ color, oos: isOOS });
         }
 
         _webSoldOutIds        = new Set();
@@ -1378,16 +1412,16 @@ async function handleCafe24ProductCSV(input) {
             }
             if (!webEntries) return;
 
-            const hiddenEntries = webEntries.filter(e => e.hidden);
-            const activeEntries = webEntries.filter(e => !e.hidden);
+            const oosEntries    = webEntries.filter(e => e.oos);
+            const activeEntries = webEntries.filter(e => !e.oos);
 
             if (activeEntries.length > 0) _webActiveIds.add(prod.id);
-            if (hiddenEntries.length > 0 && activeEntries.length === 0) _webSoldOutIds.add(prod.id);
+            if (oosEntries.length > 0 && activeEntries.length === 0) _webSoldOutIds.add(prod.id);
 
-            // 컬러 레벨: 숨겨진 컬러에 해당하는 variants 마킹
-            const hiddenColors = new Set(hiddenEntries.map(e => e.color));
+            // 컬러 레벨: out of stock인 컬러의 variants 마킹
+            const oosColors = new Set(oosEntries.map(e => e.color));
             _variants
-                .filter(v => v.product_id === prod.id && hiddenColors.has((v.color || '').toLowerCase()))
+                .filter(v => v.product_id === prod.id && oosColors.has((v.color || '').toLowerCase()))
                 .forEach(v => _webSoldoutVariantIds.add(v.id));
         });
 
@@ -1419,28 +1453,49 @@ async function handleCafe24ProductCSV(input) {
 
         // DB variants와 비교해서 없는 것 추가
         const toInsert = [];
+        const toDelete = [];
+
         _products.forEach(prod => {
             const pBase = prod.name.toLowerCase().replace(/\s*\([^)]*\)\s*$/, '').trim();
-            // 이 상품에 해당하는 CSV 항목 찾기
+
+            // 이 상품에 매칭되는 CSV 항목 전부 수집
+            const matchedEntries = [];
             csvVariantMap.forEach((sizes, key) => {
                 const [csvBase, csvColor] = key.split('|');
                 if (csvBase !== pBase && !csvBase.includes(pBase) && !pBase.includes(csvBase)) return;
 
-                // 원본 색상명 복원 (대소문자 맞춤: CSV에서 찾기)
-                const originalColor = (() => {
-                    for (let i = 1; i < lines.length; i++) {
-                        const r = _parseCSVLine(lines[i]);
-                        const fn = (r[iName] || '').trim();
-                        const cm = fn.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-                        if (!cm) continue;
-                        if (cm[1].trim().toLowerCase() === csvBase && cm[2].trim().toLowerCase() === csvColor)
-                            return cm[2].trim();
+                // 원본 색상명 복원 (대소문자)
+                let originalColor = csvColor;
+                for (let i = 1; i < lines.length; i++) {
+                    const r = _parseCSVLine(lines[i]);
+                    const fn = (r[iName] || '').trim();
+                    const cm = fn.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+                    if (!cm) continue;
+                    if (cm[1].trim().toLowerCase() === csvBase && cm[2].trim().toLowerCase() === csvColor) {
+                        originalColor = cm[2].trim(); break;
                     }
-                    return csvColor;
-                })();
+                }
+                matchedEntries.push({ csvColor, sizes, originalColor });
+            });
 
+            if (matchedEntries.length === 0) return; // CSV에 없는 상품은 건드리지 않음
+
+            // CSV에 있는 컬러 목록
+            const csvColors = new Set(matchedEntries.map(e => e.csvColor));
+
+            // 삭제: DB에 있는데 CSV에 없는 컬러 (재고 0인 것만)
+            _variants
+                .filter(v =>
+                    v.product_id === prod.id &&
+                    !csvColors.has((v.color || '').toLowerCase()) &&
+                    (v.stock || 0) === 0 && (v.sample_stock || 0) === 0 && (v.b_stock || 0) === 0
+                )
+                .forEach(v => toDelete.push(v.id));
+
+            // 컬러별 사이즈 싱크
+            matchedEntries.forEach(({ csvColor, sizes, originalColor }) => {
+                // 추가: CSV에 있는데 DB에 없는 사이즈
                 sizes.forEach(size => {
-                    // 이미 있는지 확인
                     const exists = _variants.some(v =>
                         v.product_id === prod.id &&
                         v.color.toLowerCase() === csvColor &&
@@ -1450,22 +1505,41 @@ async function handleCafe24ProductCSV(input) {
                         toInsert.push({ product_id: prod.id, color: originalColor, size, stock: 0, sample_stock: 0, b_stock: 0 });
                     }
                 });
+
+                // 삭제: DB에 있는데 CSV에 없는 사이즈 (재고 0인 것만)
+                _variants
+                    .filter(v =>
+                        v.product_id === prod.id &&
+                        v.color.toLowerCase() === csvColor &&
+                        !sizes.has(String(v.size)) &&
+                        (v.stock || 0) === 0 && (v.sample_stock || 0) === 0 && (v.b_stock || 0) === 0
+                    )
+                    .forEach(v => toDelete.push(v.id));
             });
         });
 
+        if (toDelete.length > 0) {
+            const { error } = await sb.from('variants').delete().in('id', toDelete);
+            if (error) throw new Error('variant 삭제 실패: ' + error.message);
+        }
         if (toInsert.length > 0) {
             const { error } = await sb.from('variants').insert(toInsert);
             if (error) throw new Error('variant 추가 실패: ' + error.message);
-            await loadAllData(); // 데이터 재로드
+        }
+        if (toInsert.length > 0 || toDelete.length > 0) {
+            await loadAllData();
         }
 
         _webCheckedAt = new Date().toLocaleTimeString('ko-KR');
         renderProducts();
 
-        const addedMsg = toInsert.length > 0 ? ` / 신규 variant ${toInsert.length}개 추가됨` : '';
+        const syncParts = [];
+        if (toInsert.length > 0) syncParts.push(`추가 ${toInsert.length}개`);
+        if (toDelete.length > 0) syncParts.push(`삭제 ${toDelete.length}개`);
+        const syncMsg = syncParts.length > 0 ? ` / variant ${syncParts.join(', ')}` : '';
         showToast(
-            `분석 완료 (${_webCheckedAt}) — 웹 미노출 ${_webSoldOutIds.size}개 / 품절 컬러 ${_webSoldoutVariantIds.size}개${addedMsg}`,
-            _webSoldOutIds.size > 0 || toInsert.length > 0 ? 'warning' : 'success'
+            `분석 완료 (${_webCheckedAt}) — 품절 상품 ${_webSoldOutIds.size}개 / 품절 컬러 ${_webSoldoutVariantIds.size}개${syncMsg}`,
+            _webSoldOutIds.size > 0 || toDelete.length > 0 || toInsert.length > 0 ? 'warning' : 'success'
         );
     } catch (err) {
         console.error('카페24 CSV 파싱 실패:', err);
@@ -1839,10 +1913,8 @@ function initSponsor() {
 function showSponsorSubtab(tab) {
     document.getElementById('stab-out-pane').style.display = tab === 'out' ? 'block' : 'none';
     document.getElementById('stab-in-pane').style.display  = tab === 'in'  ? 'block' : 'none';
-    const active   = 'background:#8b5cf6;color:white;border:none';
-    const inactive = 'background:white;color:#8b5cf6;border:1.5px solid #8b5cf6';
-    document.getElementById('stab-out').style.cssText = (tab === 'out' ? active : inactive);
-    document.getElementById('stab-in').style.cssText  = (tab === 'in'  ? active : inactive);
+    document.getElementById('stab-out').classList.toggle('active', tab === 'out');
+    document.getElementById('stab-in').classList.toggle('active', tab === 'in');
     if (tab === 'in') loadReturnBatches();
 }
 
@@ -2248,6 +2320,57 @@ async function cancelBatch(batchId) {
     renderHistory();
     renderDashboard();
     showToast(`"${batchName}" 묶음 취소 완료. ${stockLabel} 원상복구됐어요.`);
+}
+
+// ── 협찬 판매 ───────────────────────────────────────────
+let _sponsorSaleCtx = {};
+
+function openSponsorSale(batchId, variantId, productName, colorSize, remaining) {
+    _sponsorSaleCtx = { batchId, variantId, productName, colorSize };
+    const info = document.getElementById('sponsor-sale-product-info');
+    if (info) info.innerHTML = `<strong>${productName}</strong><br><span style="color:#71717a">${colorSize}</span><br><span style="color:#8b5cf6;font-size:12px">미회수 잔여 ${remaining}개</span>`;
+    const qtyEl = document.getElementById('sponsor-sale-qty');
+    if (qtyEl) { qtyEl.value = 1; qtyEl.max = remaining; }
+    const dateEl = document.getElementById('sponsor-sale-date');
+    if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+    new bootstrap.Modal(document.getElementById('sponsorSaleModal')).show();
+}
+
+async function submitSponsorSale() {
+    const { batchId, variantId } = _sponsorSaleCtx;
+    const qty  = parseInt(document.getElementById('sponsor-sale-qty').value) || 1;
+    const date = document.getElementById('sponsor-sale-date').value || new Date().toISOString().slice(0,10);
+    if (!batchId || !variantId) return;
+
+    const vari = _variants.find(v => v.id === variantId);
+    if (!vari) { showToast('variant를 찾을 수 없어요', 'error'); return; }
+
+    showLoading('협찬 판매 반영 중...');
+    try {
+        // 주문 기록 추가
+        const { error: oErr } = await sb.from('orders').insert([{
+            date, platform: '협찬', product_id: vari.product_id, variant_id: variantId,
+            quantity: qty, type: 'sponsor_sale',
+            source_batch_id: batchId, memo: `${_sponsorSaleCtx.productName} 협찬판매`
+        }]);
+        if (oErr) throw oErr;
+
+        // 재고 업데이트: stock -qty, sample_stock +qty
+        const { error: vErr } = await sb.from('variants').update({
+            stock: (vari.stock || 0) - qty,
+            sample_stock: (vari.sample_stock || 0) + qty
+        }).eq('id', variantId);
+        if (vErr) throw vErr;
+
+        bootstrap.Modal.getInstance(document.getElementById('sponsorSaleModal')).hide();
+        await loadAllData();
+        renderSponsorHistory();
+        showToast(`판매 반영 완료 — 재고 -${qty}, 샘플재고 +${qty}`, 'success');
+    } catch(e) {
+        showToast('오류: ' + e.message, 'error');
+    } finally {
+        hideLoading();
+    }
 }
 
 function toggleBatch(batchIdSafe) {
@@ -2792,7 +2915,7 @@ async function applyExcelMapping() {
 // 공통 이력 렌더러
 function _renderHistoryHtml(orders, showBulkCheck) {
     if (orders.length === 0) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
-    const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_in:'협찬회수', b_sale:'B급판매', b_in:'B급입고' };
+    const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
     const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas' };
     const batchMap = {};
     const regularOrders = [];
@@ -2889,7 +3012,7 @@ function renderSponsorHistory() {
     });
     if (Object.keys(batchMap).length === 0) { el.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i>협찬 이력이 없어요</div>'; return; }
 
-    // 회수 수량 반영
+    // 회수 수량 + 날짜 반영
     _orders.forEach(o => {
         if (o.type !== 'sponsor_in') return;
         let batchId = o.source_batch_id;
@@ -2899,7 +3022,23 @@ function renderSponsorHistory() {
         }
         if (!batchId || !batchMap[batchId]) return;
         batchMap[batchId].items.forEach(item => {
-            if (item.variant_id === o.variant_id) item.returned += (o.quantity || 0);
+            if (item.variant_id === o.variant_id) {
+                item.returned += (o.quantity || 0);
+                if (!item.returnDate || o.date > item.returnDate) item.returnDate = o.date;
+            }
+        });
+    });
+
+    // 판매 수량 + 날짜 반영
+    _orders.forEach(o => {
+        if (o.type !== 'sponsor_sale') return;
+        const batchId = o.source_batch_id;
+        if (!batchId || !batchMap[batchId]) return;
+        batchMap[batchId].items.forEach(item => {
+            if (item.variant_id === o.variant_id) {
+                item.sold = (item.sold || 0) + (o.quantity || 0);
+                if (!item.saleDate || o.date > item.saleDate) item.saleDate = o.date;
+            }
         });
     });
 
@@ -2908,8 +3047,15 @@ function renderSponsorHistory() {
     batches.forEach(b => {
         const totalOut = b.items.reduce((s, i) => s + (i.quantity || 0), 0);
         const totalReturned = b.items.reduce((s, i) => s + i.returned, 0);
-        const fullyReturned = b.items.every(i => i.returned >= (i.quantity || 0));
-        const partialReturned = !fullyReturned && totalReturned > 0;
+        const totalSold = b.items.reduce((s, i) => s + (i.sold || 0), 0);
+        const fullyReturned = b.items.every(i => (i.returned + (i.sold||0)) >= (i.quantity || 0));
+        const partialReturned = !fullyReturned && (totalReturned + totalSold) > 0;
+
+        // 배치 최종 회수일 (가장 최근)
+        const batchReturnDate = b.items.reduce((d, i) => {
+            if (!i.returnDate) return d;
+            return (!d || i.returnDate > d) ? i.returnDate : d;
+        }, null);
 
         const statusIcon  = fullyReturned ? '✅' : partialReturned ? '🔄' : '📦';
         const statusLabel = fullyReturned ? '회수완료' : partialReturned ? '부분회수' : '출고중';
@@ -2925,7 +3071,11 @@ function renderSponsorHistory() {
                     <span style="font-size:20px">${statusIcon}</span>
                     <div>
                         <div style="font-weight:700;font-size:14px">${b.batch_name}</div>
-                        <div style="font-size:12px;color:#71717a">${b.date} · ${b.items.length}품목 · ${totalOut}개 출고</div>
+                        <div style="font-size:12px;color:#71717a">
+                            출고 ${b.date}
+                            ${batchReturnDate ? ` · <span style="color:${statusColor};font-weight:600">회수 ${batchReturnDate}</span>` : ''}
+                            · ${b.items.length}품목 · ${totalOut}개 출고${totalSold > 0 ? ` · <span style="color:#0891b2;font-weight:600">판매 ${totalSold}개</span>` : ''}
+                        </div>
                     </div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
@@ -2937,21 +3087,34 @@ function renderSponsorHistory() {
                 <table class="table table-sm mb-0" style="font-size:13px"><tbody>`;
         b.items.forEach(i => {
             const ret = i.returned;
+            const sold = i.sold || 0;
             const out = i.quantity || 0;
-            const itemDone = ret >= out;
-            const itemPartial = ret > 0 && ret < out;
+            const accounted = ret + sold;
+            const itemDone = accounted >= out;
+            const itemPartial = !itemDone && accounted > 0;
             const rowColor = itemDone ? '#f0fdf4' : itemPartial ? '#fffbeb' : 'white';
-            const icon = itemDone ? '✅' : itemPartial ? '🔄' : '📦';
+            const icon = sold > 0 && ret === 0 ? '💰' : itemDone ? '✅' : itemPartial ? '🔄' : '📦';
+            const pname = (i.prod?.name || '').replace(/'/g,"\'");
+            const colorSize = i.vari ? i.vari.color+' / '+i.vari.size : '';
+            const remaining = out - accounted;
             html += `<tr style="background:${rowColor}">
                 <td style="padding-left:16px;width:28px">${icon}</td>
                 <td style="font-weight:500">${i.prod?.name || '삭제됨'}</td>
-                <td style="color:#71717a;font-size:12px">${i.vari ? i.vari.color+' / '+i.vari.size : '—'}</td>
+                <td style="color:#71717a;font-size:12px">${colorSize}</td>
                 <td style="font-size:12px">
                     <span style="color:#8b5cf6;font-weight:600">출고 ${out}개</span>
-                    ${ret > 0 ? `<span style="color:${itemDone?'#16a34a':'#d97706'};font-weight:600;margin-left:8px">회수 ${ret}개</span>` : ''}
+                    ${ret > 0 ? `<span style="color:#16a34a;font-weight:600;margin-left:6px">회수 ${ret}개</span>` : ''}
+                    ${sold > 0 ? `<span style="color:#0891b2;font-weight:600;margin-left:6px">판매 ${sold}개</span>` : ''}
+                </td>
+                <td style="font-size:12px;color:#71717a">
+                    ${i.returnDate ? `회수 ${i.returnDate}` : ''}
+                    ${i.saleDate ? `${i.returnDate?'<br>':''}판매 ${i.saleDate}` : ''}
                 </td>
                 <td style="font-size:12px;font-weight:700;color:${itemDone?'#16a34a':itemPartial?'#d97706':'#71717a'}">
-                    ${itemDone ? '완료' : `잔여 ${out - ret}개`}
+                    ${itemDone ? '완료' : `잔여 ${remaining}개`}
+                </td>
+                <td style="padding-right:12px">
+                    ${!itemDone ? `<button class="btn btn-sm" style="font-size:11px;padding:2px 8px;border:1px solid #0891b2;color:#0891b2" onclick="openSponsorSale('${b.batch_id}','${i.variant_id}','${pname}','${colorSize}',${remaining})">💰 판매</button>` : ''}
                 </td>
             </tr>`;
         });
