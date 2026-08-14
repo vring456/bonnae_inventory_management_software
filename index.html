@@ -2318,10 +2318,10 @@ function loadReturnBatches() {
         }
     });
 
-    // sponsor_in에서 회수 수량 집계 (source_batch_id 신규 + 메모 기반 레거시 fallback)
+    // sponsor_in(회수) + sponsor_sale(판매) 수량 집계 — 둘 다 "처리 완료"로 간주
     const returnedQtyMap = {}; // batch_id → { variant_id → returnedQty }
     _orders.forEach(o => {
-        if (o.type !== 'sponsor_in') return;
+        if (o.type !== 'sponsor_in' && o.type !== 'sponsor_sale') return;
         let matchedBatchId = null;
         if (o.source_batch_id) {
             matchedBatchId = o.source_batch_id;
@@ -2376,11 +2376,11 @@ function onBatchReturnSelect() {
         return;
     }
 
-    // variant별 이미 회수된 수량 계산 (source_batch_id 신규 + 메모 기반 레거시 fallback)
+    // variant별 회수(sponsor_in) + 판매(sponsor_sale) 수량 집계 — 둘 다 처리 완료
     const batchName = batchOrders[0]?.batch_name || '';
     const returnedQty = {};
     _orders.forEach(o => {
-        if (o.type !== 'sponsor_in') return;
+        if (o.type !== 'sponsor_in' && o.type !== 'sponsor_sale') return;
         const isReturn = o.source_batch_id === batchId ||
             (!o.source_batch_id && batchName && o.memo && o.memo.startsWith(batchName + ' 회수'));
         if (isReturn) {
