@@ -2757,17 +2757,28 @@ function renderImagePreview(items) {
 
     items.forEach((item, i) => {
         const best = _findBestProduct(item.product_name);
-        const colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
+        let colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
         const sizeHint  = (item.size  || '').toLowerCase().trim();
 
         const varOpts = best ? (() => {
             const vars = _variants.filter(v => v.product_id === best.id)
                 .sort((a, b) => a.color.localeCompare(b.color) || a.size.localeCompare(b.size));
-            // 컬러+사이즈 동시 매칭 우선, 없으면 컬러만 매칭
-            const colorMatch = v => v.color.toLowerCase().includes(colorHint) || colorHint.includes(v.color.toLowerCase());
+            // 컬러 힌트 없으면 상품명에서 variant 컬러 단어 추출
+            if (!colorHint) {
+                const pLower = item.product_name.toLowerCase();
+                const found = vars.map(v => v.color.toLowerCase()).find(c => pLower.includes(c));
+                if (found) colorHint = found;
+            }
+            // 1순위: 정확 일치 + 사이즈, 2순위: 정확 일치, 3순위: 포함 + 사이즈, 4순위: 포함
+            const exactColor = v => colorHint && v.color.toLowerCase() === colorHint;
+            const looseColor = v => colorHint && v.color.toLowerCase().includes(colorHint);
             const sizeMatch  = v => v.size.toLowerCase() === sizeHint;
-            const bestVar = vars.find(v => colorMatch(v) && sizeHint && sizeMatch(v))
-                         || vars.find(v => colorMatch(v));
+            const bestVar = (sizeHint && vars.find(v => exactColor(v) && sizeMatch(v)))
+                         || vars.find(v => exactColor(v))
+                         || (sizeHint && vars.find(v => looseColor(v) && sizeMatch(v)))
+                         || vars.find(v => looseColor(v))
+                         || (sizeHint && vars.find(v => sizeMatch(v)))
+                         || vars[0];
             return vars.map(v =>
                 `<option value="${v.id}" ${v === bestVar ? 'selected' : ''}>${v.color} / ${v.size}</option>`
             ).join('');
@@ -3317,7 +3328,7 @@ async function renderPlatformPreview(items, platform) {
 
     items.forEach((item, i) => {
         const best = (item.sku ? _products.find(p => p.sku === item.sku) : null) || _findBestProduct(item.product_name);
-        const colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
+        let colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
         const sizeHint  = (item.size  || '').toLowerCase().trim();
 
         const vars = best
@@ -3325,10 +3336,21 @@ async function renderPlatformPreview(items, platform) {
                 .sort((a, b) => a.color.localeCompare(b.color) || a.size.localeCompare(b.size))
             : [];
 
-        const colorOk = v => !colorHint || v.color.toLowerCase().includes(colorHint) || colorHint.includes(v.color.toLowerCase());
-        const sizeOk  = v => !sizeHint  || v.size.toLowerCase() === sizeHint;
-        const bestVar = vars.find(v => colorOk(v) && sizeOk(v))
-                     || vars.find(v => colorOk(v))
+        // 컬러 힌트 없으면 상품명에서 variant 컬러 단어 추출
+        if (!colorHint && vars.length) {
+            const pLower = item.product_name.toLowerCase();
+            const found = vars.map(v => v.color.toLowerCase()).find(c => pLower.includes(c));
+            if (found) colorHint = found;
+        }
+
+        const exactColor = v => colorHint && v.color.toLowerCase() === colorHint;
+        const looseColor = v => colorHint && v.color.toLowerCase().includes(colorHint);
+        const sizeOk     = v => !sizeHint || v.size.toLowerCase() === sizeHint;
+        const bestVar = (colorHint && sizeHint && vars.find(v => exactColor(v) && sizeOk(v)))
+                     || (colorHint && vars.find(v => exactColor(v)))
+                     || (colorHint && sizeHint && vars.find(v => looseColor(v) && sizeOk(v)))
+                     || (colorHint && vars.find(v => looseColor(v)))
+                     || (sizeHint  && vars.find(v => sizeOk(v)))
                      || vars[0];
 
         const varOpts = vars.length
