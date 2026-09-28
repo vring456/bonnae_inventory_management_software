@@ -157,18 +157,20 @@
 </head>
 <body>
 
-<!-- ===== PASSWORD SCREEN ===== -->
-<div id="password-screen">
+<!-- ===== SUPABASE LOGIN SCREEN ===== -->
+<div id="password-screen" style="display:none">
     <div class="pw-card">
         <div style="font-size:36px;margin-bottom:12px">🔒</div>
         <h4>bonnae</h4>
-        <p>재고 관리 시스템</p>
-        <input type="password" class="form-control text-center" id="pw-input"
-            placeholder="비밀번호 입력" style="font-size:16px;letter-spacing:3px"
+        <p>등록된 팀 계정으로 로그인하세요</p>
+        <input type="email" class="form-control mb-2" id="email-input"
+            placeholder="이메일" autocomplete="username">
+        <input type="password" class="form-control" id="pw-input"
+            placeholder="비밀번호" autocomplete="current-password"
             onkeydown="if(event.key==='Enter')checkPassword()">
         <div id="pw-error"></div>
         <button class="btn btn-accent w-100 mt-3" onclick="checkPassword()" style="height:44px;font-size:15px">
-            입장
+            로그인
         </button>
     </div>
 </div>
@@ -232,13 +234,13 @@
         <!-- Step 4: Get keys -->
         <div class="setup-step" id="step-4">
             <button class="btn btn-link btn-sm p-0 mb-3 text-muted" onclick="goStep(3)">← 뒤로</button>
-            <h5 class="fw-bold mb-3">3단계. API 키 복사</h5>
+            <h5 class="fw-bold mb-3">3단계. 팀 계정 및 API 키 준비</h5>
             <div class="alert alert-light border">
                 <ol class="mb-0 ps-3" style="font-size:14px;line-height:2">
-                    <li>Supabase 좌측 메뉴 하단 <strong>Project Settings</strong> (⚙️) 클릭</li>
-                    <li><strong>API</strong> 탭 클릭</li>
-                    <li><strong>Project URL</strong> 복사</li>
-                    <li><strong>anon public</strong> 키 복사</li>
+                    <li><strong>Authentication → Users → Add user</strong>에서 로그인할 팀 계정 생성</li>
+                    <li>좌측 메뉴 하단 <strong>Project Settings</strong> (⚙️) 클릭</li>
+                    <li><strong>API</strong> 탭에서 <strong>Project URL</strong> 복사</li>
+                    <li><strong>anon public</strong> 키 복사 (service_role 키는 입력하지 마세요)</li>
                 </ol>
             </div>
             <button class="btn btn-accent w-100" onclick="goStep('enter')">키 입력하러 가기 →</button>
@@ -346,10 +348,6 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="page-title mb-0">상품 관리</div>
             <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm" id="btn-web-check" onclick="document.getElementById('cafe24-csv-product-input').click()" title="카페24 상품관리 > 상품목록 > 엑셀 다운로드 파일을 업로드하면 진열OFF 상품을 웹품절로 표시합니다">
-                    <i class="fas fa-file-csv me-1"></i> 카페24 품절 CSV
-                </button>
-                <input type="file" id="cafe24-csv-product-input" accept=".csv" style="display:none" onchange="handleCafe24ProductCSV(this)">
                 <button class="btn btn-accent" data-bs-toggle="modal" data-bs-target="#addProductModal">
                     <i class="fas fa-plus me-1"></i> 상품 추가
                 </button>
@@ -1180,6 +1178,7 @@ CREATE TABLE IF NOT EXISTS products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   sku TEXT,
+  season TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -1205,6 +1204,9 @@ CREATE TABLE IF NOT EXISTS orders (
   quantity INTEGER NOT NULL,
   type TEXT NOT NULL,
   memo TEXT,
+  batch_id TEXT,
+  batch_name TEXT,
+  external_order_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -1214,15 +1216,38 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value JSONB
 );
 
--- RLS 비활성화 (팀 내부용)
-ALTER TABLE products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE variants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE app_settings DISABLE ROW LEVEL SECURITY;
+-- 기존 설치본도 최신 구조로 보정
+ALTER TABLE products ADD COLUMN IF NOT EXISTS season TEXT;
+ALTER TABLE variants ADD COLUMN IF NOT EXISTS sample_stock INTEGER DEFAULT 0;
+ALTER TABLE variants ADD COLUMN IF NOT EXISTS b_stock INTEGER DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS batch_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS batch_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_order_id TEXT;
+CREATE INDEX IF NOT EXISTS orders_external_order_idx ON orders(platform, external_order_id);
+CREATE INDEX IF NOT EXISTS orders_batch_idx ON orders(batch_id);
+
+-- Supabase Authentication으로 로그인한 사용자만 접근
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "team access" ON products;
+DROP POLICY IF EXISTS "team access" ON variants;
+DROP POLICY IF EXISTS "team access" ON orders;
+DROP POLICY IF EXISTS "team access" ON app_settings;
+CREATE POLICY "team access" ON products FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team access" ON variants FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team access" ON orders FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "team access" ON app_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 실시간 구독 활성화
-ALTER PUBLICATION supabase_realtime ADD TABLE variants;
-ALTER PUBLICATION supabase_realtime ADD TABLE orders;`;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE variants;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;`;
 
 document.getElementById('sql-preview').textContent = SQL_SETUP;
 
@@ -1249,13 +1274,9 @@ async function connectSupabase() {
 
     try {
         const client = createClient(url, key);
-        // Test connection
-        const { error } = await client.from('products').select('count', { count:'exact', head:true });
-        if (error) throw error;
-
         localStorage.setItem(LS_URL, url);
         localStorage.setItem(LS_KEY, key);
-        initApp(url, key);
+        await initApp(url, key);
     } catch(e) {
         errEl.textContent = '연결 실패: ' + (e.message || '테이블이 생성됐는지 확인해주세요');
         btn.textContent = '연결하기';
@@ -1279,6 +1300,13 @@ async function initApp(url, key) {
     document.getElementById('settings-url').value = url;
     document.getElementById('settings-key').value = key;
 
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+        document.getElementById('password-screen').style.display = 'flex';
+        setTimeout(() => document.getElementById('email-input')?.focus(), 100);
+        return;
+    }
+    document.getElementById('password-screen').style.display = 'none';
     loadColumnSettings();
     await loadAllData();
     subscribeRealtime();
@@ -1571,7 +1599,8 @@ function renderDashboard() {
 // PRODUCTS
 // =====================
 function populateProductFilters() {
-    const seasons = [...new Set(_products.map(p => p.season).filter(Boolean))].sort();
+    const seasons = [...new Set(_products.map(p => p.season).filter(Boolean))]
+        .sort((a, b) => _seasonRank(b) - _seasonRank(a) || a.localeCompare(b, 'en', { sensitivity:'base', numeric:true }));
     const colors  = [...new Set(_variants.map(v => v.color).filter(Boolean))].sort();
 
     const sf = document.getElementById('products-season-filter');
@@ -1601,7 +1630,7 @@ function renderProducts() {
     prods = prods.slice().sort((a, b) => {
         const sc = _seasonRank(b.season) - _seasonRank(a.season); // 최신 시즌 먼저
         if (sc !== 0) return sc;
-        return a.name.localeCompare(b.name); // 같은 시즌 내 알파벳순
+        return a.name.localeCompare(b.name, 'en', { sensitivity:'base', numeric:true }); // 같은 시즌 내 알파벳순
     });
 
     if (prods.length === 0) {
@@ -1629,6 +1658,10 @@ function renderProducts() {
                 v.stock === 0 && allZero && !_webSoldoutVariantIds.has(v.id)
             );
         }
+        pvariants.sort((a, b) =>
+            String(a.color || '').localeCompare(String(b.color || ''), 'en', { sensitivity:'base', numeric:true }) ||
+            String(a.size || '').localeCompare(String(b.size || ''), 'en', { sensitivity:'base', numeric:true })
+        );
 
         if (pvariants.length === 0) return;
 
@@ -1733,6 +1766,111 @@ function _parseCSVLine(line) {
     }
     cols.push(cur);
     return cols;
+}
+
+// ── 지정된 26FW 상품 신규 등록 ───────────────────────────────────
+const FW26_PRODUCT_NAMES = new Set([
+    'Distressed knit wedge boots', 'Bolo tie',
+    'Mini school bag (Silver)', 'Mini school bag (Black)',
+    'Wolf long sleeve', 'Sleeping cat long sleeve',
+    'Shoulder padded mini dress (Pink)', 'Shoulder padded mini dress (Beige)', 'Shoulder padded mini dress (Black)',
+    'Strap shirt dress (White)', 'Strap shirt dress (Black)',
+    'Scarf mini dress (Mauve)', 'Scarf mini dress (Beige)', 'Scarf mini dress (Charcoal)', 'Scarf mini dress (Black)',
+    'Muffler hoodie zip-up (White)', 'Muffler hoodie zip-up (Beige)', 'Muffler hoodie zip-up (Black)',
+    'Dreamer sweatpants (White)', 'Dreamer sweatpants (Grey)', 'Dreamer sweatpants (Black)',
+    'Dreamer zip hoodie (Grey)', 'Dreamer zip hoodie (Black)',
+    'Utility pleated micro skirt (Charcoal)', 'Utility pleated micro skirt (Black)',
+    'Hooded slim blazer (Charcoal)', 'Hooded slim blazer (Black)',
+    'Printed leggings', 'Leather skinny pants (Black)',
+    'Leather micro shorts (Silver)', 'Leather micro shorts (Black)',
+    'Slim leather jacket (Stone)', 'Slim leather jacket (Black)'
+].map(v => v.toLowerCase()));
+
+function _fw26Sizes(value) {
+    const m = String(value || '').match(/\{([^}]+)\}/);
+    if (!m) return ['FREE'];
+    return m[1].split('|').map(v => v.replace(/\([^)]*\)/g, '').trim()).filter(Boolean);
+}
+
+function _fw26NameAndColor(fullName, summary) {
+    const m = fullName.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (m) return { name: m[1].trim(), color: m[2].trim() };
+    const plain = String(summary || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ' ');
+    const cm = plain.match(/Color\s*:\s*([^\n]+)/i);
+    return { name: fullName.trim(), color: cm ? cm[1].trim().split(/[,/]/)[0].trim() : 'Default' };
+}
+
+async function import26FWProducts(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    const btn = document.getElementById('btn-26fw-import');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> 등록 중...';
+
+    try {
+        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+        const selected = rows.filter(r => FW26_PRODUCT_NAMES.has(String(r['상품명'] || '').trim().toLowerCase()));
+        if (!selected.length) throw new Error('지정된 26FW 상품을 CSV에서 찾지 못했습니다.');
+
+        const grouped = new Map();
+        for (const row of selected) {
+            const fullName = String(row['상품명'] || '').trim();
+            const parsed = _fw26NameAndColor(fullName, row['상품 요약설명']);
+            const key = parsed.name.toLowerCase();
+            if (!grouped.has(key)) grouped.set(key, { name: parsed.name, variants: [] });
+            for (const size of _fw26Sizes(row['옵션입력'])) {
+                grouped.get(key).variants.push({ color: parsed.color, size: String(size) });
+            }
+        }
+
+        let productCount = 0, variantCount = 0, skippedCount = 0;
+        for (const group of grouped.values()) {
+            let product = _products.find(p => p.name.trim().toLowerCase() === group.name.trim().toLowerCase());
+            if (!product) {
+                const { data, error } = await sb.from('products').insert({
+                    name: group.name,
+                    sku: generateSkuFromName(group.name, '26FW'),
+                    season: '26FW'
+                }).select().single();
+                if (error) throw error;
+                product = data;
+                _products.push(data);
+                productCount++;
+            } else if (product.season !== '26FW') {
+                const { error } = await sb.from('products').update({ season: '26FW' }).eq('id', product.id);
+                if (error) throw error;
+                product.season = '26FW';
+            }
+
+            const existing = _variants.filter(v => v.product_id === product.id);
+            const unique = new Map(group.variants.map(v => [`${v.color.toLowerCase()}|${v.size.toLowerCase()}`, v]));
+            const additions = [...unique.values()].filter(v => !existing.some(e =>
+                String(e.color).toLowerCase() === v.color.toLowerCase() && String(e.size).toLowerCase() === v.size.toLowerCase()
+            ));
+            skippedCount += unique.size - additions.length;
+            if (additions.length) {
+                const payload = additions.map(v => ({ ...v, product_id: product.id, stock: 0, sample_stock: 0, b_stock: 0 }));
+                const { data, error } = await sb.from('variants').insert(payload).select();
+                if (error) throw error;
+                _variants.push(...(data || []));
+                variantCount += additions.length;
+            }
+        }
+
+        await refreshProducts();
+        populateProductFilters();
+        renderProducts();
+        renderDashboard();
+        showToast(`26FW 등록 완료: 상품 ${productCount}개, 옵션 ${variantCount}개${skippedCount ? `, 중복 ${skippedCount}개 제외` : ''}`);
+    } catch (e) {
+        console.error(e);
+        showToast('26FW 등록 실패: ' + (e.message || 'CSV를 확인해주세요'), 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-import me-1"></i> 26FW 상품 등록';
+    }
 }
 
 async function handleCafe24ProductCSV(input) {
@@ -4184,12 +4322,13 @@ function _findBestProduct(query) {
     return null;
 }
 
-// 시즌 정렬 점수: "26HS"=261, "26SS"=260, "25HS"=251 ... HS > SS (같은 연도)
+// 시즌 정렬 점수: 최신 연도 우선, 같은 연도에서는 FW > HS > SS
 function _seasonRank(season) {
     if (!season) return 0;
-    const m = season.match(/(\d+)\s*(HS|SS)/i);
+    const m = String(season).trim().match(/(\d+)\s*(FW|HS|SS)/i);
     if (!m) return 0;
-    return parseInt(m[1]) * 10 + (m[2].toUpperCase() === 'HS' ? 1 : 0);
+    const seasonOrder = { SS: 1, HS: 2, FW: 3 };
+    return parseInt(m[1], 10) * 10 + seasonOrder[m[2].toUpperCase()];
 }
 
 function _isDeduct(type) { return ['sale','sample_out','sponsor_out','sponsor_out_new','b_sale'].includes(type); }
@@ -4372,51 +4511,46 @@ async function saveCafe24() {
 
 // =====================
 // =====================
-// PASSWORD GUARD
+// SUPABASE AUTHENTICATION
 // =====================
-const APP_PASSWORD = 'bonnae2026'; // ← 비밀번호 변경 시 여기를 수정하세요
-const LS_AUTH = 'bonnae_auth';
-
-function checkPassword() {
+async function checkPassword() {
+    const email = document.getElementById('email-input').value.trim();
     const input = document.getElementById('pw-input').value;
-    if (input === APP_PASSWORD) {
-        localStorage.setItem(LS_AUTH, 'true');
+    const err = document.getElementById('pw-error');
+    if (!sb) { err.textContent = '먼저 Supabase 연결 정보를 입력하세요'; return; }
+    if (!email || !input) { err.textContent = '이메일과 비밀번호를 입력하세요'; return; }
+    err.textContent = '로그인 중...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: input });
+    if (!error) {
         document.getElementById('password-screen').style.display = 'none';
         document.getElementById('pw-input').value = '';
+        err.textContent = '';
+        loadColumnSettings();
+        await loadAllData();
+        subscribeRealtime();
+        renderDashboard();
     } else {
-        const err = document.getElementById('pw-error');
-        err.textContent = '비밀번호가 틀렸어요';
+        err.textContent = '로그인 실패: 이메일 또는 비밀번호를 확인하세요';
         document.getElementById('pw-input').value = '';
         document.getElementById('pw-input').focus();
-        setTimeout(() => { err.textContent = ''; }, 2500);
     }
 }
 
-function lockApp() {
-    localStorage.removeItem(LS_AUTH);
+async function lockApp() {
+    if (sb) await sb.auth.signOut();
     document.getElementById('password-screen').style.display = 'flex';
-    setTimeout(() => document.getElementById('pw-input').focus(), 100);
-}
-
-// 이미 인증된 경우 바로 통과
-if (localStorage.getItem(LS_AUTH) === 'true') {
-    document.getElementById('password-screen').style.display = 'none';
-} else {
-    setTimeout(() => document.getElementById('pw-input')?.focus(), 100);
+    setTimeout(() => document.getElementById('email-input').focus(), 100);
 }
 
 // =====================
 // AUTO-START
 // =====================
-const PRESET_URL = 'https://gqgjfreieaekgzujltze.supabase.co';
-const PRESET_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZ2pmcmVpZWFla2d6dWpsdHplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NzgyMzMsImV4cCI6MjA5NjU1NDIzM30.75O5N1lFFjpLPqgHlHSy-I1xhbjhQVeNz3KavtAJu2g';
-
-const savedUrl = localStorage.getItem(LS_URL) || PRESET_URL;
-const savedKey = localStorage.getItem(LS_KEY) || PRESET_KEY;
+const savedUrl = localStorage.getItem(LS_URL) || '';
+const savedKey = localStorage.getItem(LS_KEY) || '';
 if (savedUrl && savedKey) {
-    localStorage.setItem(LS_URL, savedUrl);
-    localStorage.setItem(LS_KEY, savedKey);
     initApp(savedUrl, savedKey);
+} else {
+    document.getElementById('password-screen').style.display = 'none';
 }
 </script>
 </body>
