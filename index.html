@@ -1017,6 +1017,35 @@
 
 </main>
 
+<!-- BATCH ITEM ADD MODAL -->
+<div class="modal fade" id="batchAddModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title fw-bold">묶음에 항목 추가</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="text-muted small mb-3" id="batch-add-label"></div>
+            <div class="mb-3">
+                <label class="form-label">상품</label>
+                <select class="form-select" id="batch-add-product" onchange="updateBatchAddVariants()"></select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">색상 / 사이즈</label>
+                <select class="form-select" id="batch-add-variant"></select>
+            </div>
+            <div>
+                <label class="form-label">수량</label>
+                <input type="number" class="form-control" id="batch-add-qty" value="1" min="1">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">닫기</button>
+            <button type="button" class="btn btn-accent" onclick="submitBatchAdd()">추가 반영</button>
+        </div>
+    </div></div>
+</div>
+
 <!-- ADD PRODUCT MODAL -->
 <!-- 협찬 판매 모달 -->
 <div class="modal fade" id="sponsorSaleModal" tabindex="-1">
@@ -3232,6 +3261,123 @@ async function cancelBatch(batchId) {
     showToast(`"${batchName}" 묶음 취소 완료. ${stockLabel} 원상복구됐어요.`);
 }
 
+// ── 묶음 부분 수정 ───────────────────────────────────────
+let _batchAddCtx = null;
+
+async function partialCancelBatchOrder(orderId) {
+    const o = _orders.find(x => x.id === orderId);
+    if (!o || o.type === 'cancel') return;
+    const prod = _products.find(p => p.id === o.product_id);
+    const vari = _variants.find(v => v.id === o.variant_id);
+    const label = `${prod?.name || '상품'}${vari ? ` ${vari.color}/${vari.size}` : ''}`;
+    const raw = prompt(`"${label}"에서 취소할 수량을 입력하세요.\n현재 반영 수량: ${o.quantity}개`, String(o.quantity));
+    if (raw === null) return;
+    const qty = parseInt(raw, 10);
+    if (!Number.isInteger(qty) || qty < 1 || qty > o.quantity) {
+        showToast(`1~${o.quantity} 사이의 수량을 입력하세요`, 'danger');
+        return;
+    }
+    if (!confirm(`${qty}개를 부분 취소할까요?\n해당 재고가 ${qty}개 원상복구됩니다.`)) return;
+
+    showLoading('부분 취소 처리 중...');
+    const updates = [];
+    if (vari) {
+        const field = _stockField(o.type);
+        const delta = _isDeduct(o.type) ? qty : -qty;
+        const next = (vari[field] || 0) + delta;
+        updates.push(sb.from('variants').update({ [field]: next }).eq('id', vari.id));
+        vari[field] = next;
+    }
+
+    if (qty === o.quantity) {
+        updates.push(sb.from('orders').update({
+            type: 'cancel', memo: `[취소] ${o.memo || ''}`.trim(), external_order_id: null
+        }).eq('id', o.id));
+    } else {
+        updates.push(sb.from('orders').update({ quantity: o.quantity - qty }).eq('id', o.id));
+        updates.push(sb.from('orders').insert({
+            date: o.date, platform: o.platform, product_id: o.product_id, variant_id: o.variant_id,
+            quantity: qty, type: 'cancel', memo: `[부분취소] ${o.memo || ''}`.trim(),
+            batch_id: o.batch_id, batch_name: o.batch_name
+        }));
+    }
+
+    await Promise.all(updates);
+    await Promise.all([refreshOrders(), refreshVariants()]);
+    hideLoading();
+    renderHistory();
+    renderDashboard();
+    showToast(`${label} ${qty}개 부분 취소 완료`);
+}
+
+function openBatchAddModal(batchId) {
+    const active = _orders.filter(o => o.batch_id === batchId && o.type !== 'cancel');
+    if (!active.length) return;
+    const base = active[0];
+    _batchAddCtx = {
+        batchId, batchName: base.batch_name || batchId, date: base.date,
+        platform: base.platform, type: base.type, memo: base.memo || base.batch_name || ''
+    };
+    document.getElementById('batch-add-label').textContent = `${_batchAddCtx.batchName} · ${base.platform} · ${base.date}`;
+    const productSel = document.getElementById('batch-add-product');
+    productSel.innerHTML = '<option value="">상품을 선택하세요</option>' + _products.slice()
+        .sort((a,b) => _seasonRank(b.season)-_seasonRank(a.season) || a.name.localeCompare(b.name, 'en', {sensitivity:'base'}))
+        .map(p => `<option value="${p.id}">${p.season ? '['+p.season+'] ' : ''}${p.name}</option>`).join('');
+    document.getElementById('batch-add-variant').innerHTML = '<option value="">상품을 먼저 선택하세요</option>';
+    document.getElementById('batch-add-qty').value = 1;
+    new bootstrap.Modal(document.getElementById('batchAddModal')).show();
+}
+
+function updateBatchAddVariants() {
+    const productId = document.getElementById('batch-add-product').value;
+    const sel = document.getElementById('batch-add-variant');
+    const field = _batchAddCtx ? _stockField(_batchAddCtx.type) : 'stock';
+    const label = field === 'sample_stock' ? '샘플' : field === 'b_stock' ? 'B급' : '판매';
+    const vars = _variants.filter(v => v.product_id === productId).slice().sort((a,b) =>
+        a.color.localeCompare(b.color, 'en', {sensitivity:'base'}) ||
+        String(a.size).localeCompare(String(b.size), 'en', {numeric:true})
+    );
+    sel.innerHTML = vars.length ? vars.map(v =>
+        `<option value="${v.id}">${v.color} / ${v.size} (${label}재고 ${v[field] || 0}개)</option>`
+    ).join('') : '<option value="">등록된 옵션이 없어요</option>';
+}
+
+async function submitBatchAdd() {
+    if (!_batchAddCtx) return;
+    const productId = document.getElementById('batch-add-product').value;
+    const variantId = document.getElementById('batch-add-variant').value;
+    const qty = parseInt(document.getElementById('batch-add-qty').value, 10);
+    if (!productId || !variantId || !Number.isInteger(qty) || qty < 1) {
+        showToast('상품, 옵션, 수량을 확인하세요', 'danger'); return;
+    }
+    const vari = _variants.find(v => v.id === variantId);
+    if (!vari) { showToast('상품 옵션을 찾을 수 없어요', 'danger'); return; }
+    const field = _stockField(_batchAddCtx.type);
+    const delta = _isDeduct(_batchAddCtx.type) ? -qty : qty;
+    const next = (vari[field] || 0) + delta;
+    if (!confirm(`${_batchAddCtx.batchName} 묶음에 ${qty}개를 추가할까요?`)) return;
+
+    showLoading('묶음에 항목 추가 중...');
+    const { error: stockError } = await sb.from('variants').update({ [field]: next }).eq('id', variantId);
+    if (stockError) { hideLoading(); showToast('재고 변경 실패: '+stockError.message, 'danger'); return; }
+    const { error: orderError } = await sb.from('orders').insert({
+        date: _batchAddCtx.date, platform: _batchAddCtx.platform, product_id: productId, variant_id: variantId,
+        quantity: qty, type: _batchAddCtx.type, memo: `[묶음추가] ${_batchAddCtx.memo}`.trim(),
+        batch_id: _batchAddCtx.batchId, batch_name: _batchAddCtx.batchName
+    });
+    if (orderError) {
+        await sb.from('variants').update({ [field]: vari[field] || 0 }).eq('id', variantId);
+        hideLoading(); showToast('항목 추가 실패: '+orderError.message, 'danger'); return;
+    }
+    vari[field] = next;
+    bootstrap.Modal.getInstance(document.getElementById('batchAddModal'))?.hide();
+    await refreshOrders();
+    hideLoading();
+    renderHistory();
+    renderDashboard();
+    showToast(`"${_batchAddCtx.batchName}"에 ${qty}개 추가 완료`);
+}
+
 // ── 협찬 판매 ───────────────────────────────────────────
 let _sponsorSaleCtx = {};
 
@@ -4279,11 +4425,12 @@ function _renderUnifiedHistory(items, showBulkCheck) {
                         <span style="font-size:19px">${isSponsor?'📦':'📊'}</span>
                         <div style="min-width:0">
                             <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${group.batch_name}${allCancelled?'<span class="badge bg-secondary ms-2" style="font-size:10px">취소됨</span>':''}</div>
-                            <div style="font-size:12px;color:#71717a">${group.orders.length}품목 · 총 ${totalQty}개</div>
+                            <div style="font-size:12px;color:#71717a">${activeOrders.length}품목 · 총 ${totalQty}개${group.orders.length>activeOrders.length?` · 취소 ${group.orders.length-activeOrders.length}건`:''}</div>
                         </div>
                     </div>
                     <div class="d-flex gap-2 align-items-center" style="flex:0 0 auto">
-                        ${!allCancelled ? `<button class="btn btn-outline-danger btn-sm" style="font-size:11px" onclick="event.stopPropagation();cancelBatch('${group.batch_id}')">묶음 취소</button>` : ''}
+                        ${!allCancelled ? `<button class="btn btn-outline-primary btn-sm" style="font-size:11px" onclick="event.stopPropagation();openBatchAddModal('${group.batch_id}')">항목 추가</button>
+                        <button class="btn btn-outline-danger btn-sm" style="font-size:11px" onclick="event.stopPropagation();cancelBatch('${group.batch_id}')">묶음 취소</button>` : ''}
                         <i class="fas fa-chevron-down" id="bchev-${safe}" style="color:${accent};transition:transform .2s"></i>
                     </div>
                 </div>
@@ -4297,7 +4444,8 @@ function _renderUnifiedHistory(items, showBulkCheck) {
                     <td style="padding-left:18px;font-weight:500">${prod?.name||'삭제됨'}</td>
                     <td style="color:#71717a;font-size:12px">${vari?vari.color+' / '+vari.size:'—'}</td>
                     <td><span class="badge ${_typeBadge(o.type)}" style="font-size:10px">${tl[o.type]||o.type}</span></td>
-                    <td style="font-weight:700;color:${cancelled?'#a1a1aa':deduct?'#dc2626':'#16a34a'}">${deduct?'-':'+'}${o.quantity}개</td>
+                    <td style="font-weight:700;color:${cancelled?'#a1a1aa':deduct?'#dc2626':'#16a34a'}">${cancelled?'':deduct?'-':'+'}${o.quantity}개</td>
+                    <td style="padding-right:12px;text-align:right">${cancelled?'':`<button class="btn btn-outline-danger btn-sm" style="font-size:10px;padding:2px 7px" onclick="partialCancelBatchOrder('${o.id}')">부분 취소</button>`}</td>
                 </tr>`;
             });
             html += '</tbody></table></div></div></div>';
