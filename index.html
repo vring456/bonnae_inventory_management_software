@@ -2884,7 +2884,7 @@ function renderImagePreview(items) {
     items.forEach((item, i) => {
         const best = _findBestProduct(item.product_name);
         let colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
-        const sizeHint  = (item.size  || '').toLowerCase().trim();
+        const sizeHint  = _normalizeVariantSize(item.size);
 
         const varOpts = best ? (() => {
             const vars = _variants.filter(v => v.product_id === best.id)
@@ -2898,14 +2898,15 @@ function renderImagePreview(items) {
             // 1순위: 정확 일치 + 사이즈, 2순위: 정확 일치, 3순위: 포함 + 사이즈, 4순위: 포함
             const exactColor = v => colorHint && v.color.toLowerCase() === colorHint;
             const looseColor = v => colorHint && v.color.toLowerCase().includes(colorHint);
-            const sizeMatch  = v => v.size.toLowerCase() === sizeHint;
-            const bestVar = (sizeHint && vars.find(v => exactColor(v) && sizeMatch(v)))
-                         || vars.find(v => exactColor(v))
-                         || (sizeHint && vars.find(v => looseColor(v) && sizeMatch(v)))
-                         || vars.find(v => looseColor(v))
-                         || (sizeHint && vars.find(v => sizeMatch(v)))
-                         || vars[0];
-            return vars.map(v =>
+            const sizeMatch  = v => _normalizeVariantSize(v.size) === sizeHint;
+            const bestVar = sizeHint
+                ? (vars.find(v => exactColor(v) && sizeMatch(v))
+                    || vars.find(v => looseColor(v) && sizeMatch(v))
+                    || vars.find(v => sizeMatch(v)))
+                : (vars.find(v => exactColor(v)) || vars.find(v => looseColor(v)) || vars[0]);
+            const warning = sizeHint && !bestVar
+                ? `<option value="" selected>⚠️ 사이즈 ${item.size} 확인 필요</option>` : '';
+            return warning + vars.map(v =>
                 `<option value="${v.id}" ${v === bestVar ? 'selected' : ''}>${v.color} / ${v.size}</option>`
             ).join('');
         })() : '<option value="">상품 선택 후 표시</option>';
@@ -3455,7 +3456,7 @@ async function renderPlatformPreview(items, platform) {
     items.forEach((item, i) => {
         const best = (item.sku ? _products.find(p => p.sku === item.sku) : null) || _findBestProduct(item.product_name);
         let colorHint = (item.color || '').toLowerCase().replace(/[()（）]/g, '').trim();
-        const sizeHint  = (item.size  || '').toLowerCase().trim();
+        const sizeHint  = _normalizeVariantSize(item.size);
 
         const vars = best
             ? _variants.filter(v => v.product_id === best.id)
@@ -3471,16 +3472,18 @@ async function renderPlatformPreview(items, platform) {
 
         const exactColor = v => colorHint && v.color.toLowerCase() === colorHint;
         const looseColor = v => colorHint && v.color.toLowerCase().includes(colorHint);
-        const sizeOk     = v => !sizeHint || v.size.toLowerCase() === sizeHint;
-        const bestVar = (colorHint && sizeHint && vars.find(v => exactColor(v) && sizeOk(v)))
-                     || (colorHint && vars.find(v => exactColor(v)))
-                     || (colorHint && sizeHint && vars.find(v => looseColor(v) && sizeOk(v)))
-                     || (colorHint && vars.find(v => looseColor(v)))
-                     || (sizeHint  && vars.find(v => sizeOk(v)))
-                     || vars[0];
+        const sizeOk     = v => !sizeHint || _normalizeVariantSize(v.size) === sizeHint;
+        const bestVar = sizeHint
+            ? ((colorHint && vars.find(v => exactColor(v) && sizeOk(v)))
+                || (colorHint && vars.find(v => looseColor(v) && sizeOk(v)))
+                || vars.find(v => sizeOk(v)))
+            : ((colorHint && vars.find(v => exactColor(v)))
+                || (colorHint && vars.find(v => looseColor(v)))
+                || vars[0]);
 
         const varOpts = vars.length
-            ? vars.map(v => `<option value="${v.id}" ${v === bestVar ? 'selected' : ''}>${v.color} / ${v.size}</option>`).join('')
+            ? ((sizeHint && !bestVar ? `<option value="" selected>⚠️ 사이즈 ${item.size} 확인 필요</option>` : '') +
+               vars.map(v => `<option value="${v.id}" ${v === bestVar ? 'selected' : ''}>${v.color} / ${v.size}</option>`).join(''))
             : '<option value="">상품 선택 후 표시</option>';
 
         const ordId = item.orderId || '';
@@ -3635,11 +3638,17 @@ function isKreamFormat(rows) {
 }
 
 function parseKreamSize(optionStr) {
-    const s = String(optionStr || '').trim();
-    const m = s.match(/^(\d+)/);
-    if (m) return m[1];
-    if (/free|one|^f$/i.test(s)) return '1';
-    return s;
+    return _normalizeVariantSize(optionStr);
+}
+
+// "2(245-250)", "Size=2", "2"를 모두 재고 옵션 "2"로 비교
+function _normalizeVariantSize(value) {
+    let s = String(value || '').trim();
+    s = s.replace(/^size\s*=\s*/i, '').trim();
+    const numbered = s.match(/^(\d+)/);
+    if (numbered) return numbered[1];
+    if (/^(free|one|one size|f)$/i.test(s)) return '1';
+    return s.toLowerCase();
 }
 
 async function applyKreamDirect(rows) {
@@ -3677,9 +3686,8 @@ async function applyKreamDirect(rows) {
         if (!prod) { unmatched.push(pName); return; }
 
         const kpvs = _variants.filter(v => v.product_id === prod.id);
-        let vari = kpvs.find(v => v.size === size);
-        if (!vari && kpvs.length === 1) vari = kpvs[0];
-        if (!vari) vari = kpvs[0];
+        let vari = kpvs.find(v => _normalizeVariantSize(v.size) === _normalizeVariantSize(size));
+        if (!vari && !size && kpvs.length === 1) vari = kpvs[0];
         if (!vari) { unmatched.push(`${pName} (사이즈:${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
@@ -3721,7 +3729,7 @@ function parseSampleasRow(row) {
         const cm = opts.match(/COLOR\s*=\s*([^,)]+)/i);
         const sm = opts.match(/SIZE\s*=\s*([^,)]+)/i);
         if (cm) color = cm[1].trim();
-        if (sm) size  = sm[1].trim();
+        if (sm) size  = _normalizeVariantSize(sm[1]);
     }
 
     // 중복 방지용 고유 ID
@@ -3757,12 +3765,11 @@ async function applySampleasDirect(rows) {
         const spvs = _variants.filter(v => v.product_id === prod.id);
         let vari = spvs.find(v =>
             (!color || v.color.toLowerCase() === color.toLowerCase()) &&
-            (!size  || v.size === size)
+            (!size  || _normalizeVariantSize(v.size) === _normalizeVariantSize(size))
         );
-        if (!vari && color) vari = spvs.find(v => v.color.toLowerCase() === color.toLowerCase());
-        if (!vari && size)  vari = spvs.find(v => v.size === size);
-        if (!vari && spvs.length === 1) vari = spvs[0];
-        if (!vari) vari = spvs[0];
+        if (!vari && size)  vari = spvs.find(v => _normalizeVariantSize(v.size) === _normalizeVariantSize(size));
+        if (!vari && !size && color) vari = spvs.find(v => v.color.toLowerCase() === color.toLowerCase());
+        if (!vari && !size && spvs.length === 1) vari = spvs[0];
         if (!vari) { unmatched.push(`${cleanName}(${color}/${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
@@ -3799,7 +3806,7 @@ function parseCafe24Row(row) {
 
     // 사이즈: "Size=1" → "1", 없으면 기본값 '1'
     const sizeMatch = String(row['옵션'] || '').match(/Size\s*=\s*(\S+)/i);
-    const size = sizeMatch ? sizeMatch[1].trim() : '1';
+    const size = sizeMatch ? _normalizeVariantSize(sizeMatch[1]) : '1';
 
     // 중복 방지용 고유 ID
     const orderNum = String(row['주문번호'] || '').trim();
@@ -3834,11 +3841,11 @@ async function applyCafe24Direct(rows) {
         const pvs = _variants.filter(v => v.product_id === prod.id);
         let vari = pvs.find(v =>
             (!color || v.color.toLowerCase() === color.toLowerCase()) &&
-            (!size  || v.size === size)
+            (!size  || _normalizeVariantSize(v.size) === _normalizeVariantSize(size))
         );
-        if (!vari && color) vari = pvs.find(v => v.color.toLowerCase() === color.toLowerCase());
-        if (!vari && size)  vari = pvs.find(v => v.size === size);
-        if (!vari && pvs.length === 1) vari = pvs[0];
+        if (!vari && size)  vari = pvs.find(v => _normalizeVariantSize(v.size) === _normalizeVariantSize(size));
+        if (!vari && !size && color) vari = pvs.find(v => v.color.toLowerCase() === color.toLowerCase());
+        if (!vari && !size && pvs.length === 1) vari = pvs[0];
         if (!vari) { unmatched.push(`${full}(${color}/${size})`); return; }
 
         variantDelta[vari.id] = (variantDelta[vari.id] || 0) - qty;
@@ -4241,6 +4248,82 @@ function renderSponsorHistory() {
     el.innerHTML = html + _paginator(_sponsorPage, totalPages, 'setSponsorPage');
 }
 
+// 묶음 이력과 개별 이력을 실제 시간순으로 한 목록에 표시
+function _renderUnifiedHistory(items, showBulkCheck) {
+    if (!items.length) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
+    const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
+    const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas' };
+    let html = '';
+    let shownDate = null;
+
+    items.forEach(item => {
+        const date = item.data.date || '';
+        if (date !== shownDate) {
+            shownDate = date;
+            html += `<div style="font-size:13px;font-weight:700;color:#52525b;margin:20px 0 10px;padding-bottom:7px;border-bottom:1px solid #e4e4e7">${date}</div>`;
+        }
+
+        if (item.type === 'batch') {
+            const group = item.data;
+            const allCancelled = group.orders.every(o => o.type === 'cancel');
+            const activeOrders = group.orders.filter(o => o.type !== 'cancel');
+            const totalQty = activeOrders.reduce((s,o) => s + (o.quantity || 0), 0);
+            const safe = group.batch_id.replace(/-/g,'_');
+            const isSponsor = group.orders.some(o => _isSampleType(o.type));
+            const bgColor = isSponsor ? '#fdf4ff' : '#f0f9ff';
+            const brColor = isSponsor ? '#e9d5ff' : '#bae6fd';
+            const accent = isSponsor ? '#8b5cf6' : '#0ea5e9';
+            html += `<div class="batch-group mb-2 rounded" style="overflow:hidden;border:1px solid ${brColor};${allCancelled?'opacity:.55':''}">
+                <div class="d-flex align-items-center justify-content-between gap-2 px-3 py-3" style="background:${bgColor};cursor:pointer" onclick="toggleBatch('${safe}')">
+                    <div class="d-flex align-items-center gap-3" style="min-width:0">
+                        <span style="font-size:19px">${isSponsor?'📦':'📊'}</span>
+                        <div style="min-width:0">
+                            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${group.batch_name}${allCancelled?'<span class="badge bg-secondary ms-2" style="font-size:10px">취소됨</span>':''}</div>
+                            <div style="font-size:12px;color:#71717a">${group.orders.length}품목 · 총 ${totalQty}개</div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center" style="flex:0 0 auto">
+                        ${!allCancelled ? `<button class="btn btn-outline-danger btn-sm" style="font-size:11px" onclick="event.stopPropagation();cancelBatch('${group.batch_id}')">묶음 취소</button>` : ''}
+                        <i class="fas fa-chevron-down" id="bchev-${safe}" style="color:${accent};transition:transform .2s"></i>
+                    </div>
+                </div>
+                <div id="bdetail-${safe}" style="display:none;background:white"><div class="table-responsive"><table class="table table-sm mb-0" style="font-size:13px"><tbody>`;
+            group.orders.forEach(o => {
+                const prod = _products.find(p => p.id === o.product_id);
+                const vari = _variants.find(v => v.id === o.variant_id);
+                const cancelled = o.type === 'cancel';
+                const deduct = _isDeduct(o.type);
+                html += `<tr style="${cancelled?'opacity:.45;text-decoration:line-through':''}">
+                    <td style="padding-left:18px;font-weight:500">${prod?.name||'삭제됨'}</td>
+                    <td style="color:#71717a;font-size:12px">${vari?vari.color+' / '+vari.size:'—'}</td>
+                    <td><span class="badge ${_typeBadge(o.type)}" style="font-size:10px">${tl[o.type]||o.type}</span></td>
+                    <td style="font-weight:700;color:${cancelled?'#a1a1aa':deduct?'#dc2626':'#16a34a'}">${deduct?'-':'+'}${o.quantity}개</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div></div></div>';
+            return;
+        }
+
+        const o = item.data;
+        const prod = _products.find(p => p.id === o.product_id);
+        const vari = _variants.find(v => v.id === o.variant_id);
+        const cancelled = o.type === 'cancel';
+        const deduct = _isDeduct(o.type);
+        html += `<div class="d-flex align-items-center gap-3 px-3 py-3 mb-2 rounded" style="border:1px solid #e4e4e7;background:white;${cancelled?'opacity:.5;text-decoration:line-through':''}">
+            ${showBulkCheck ? (cancelled ? '<span style="width:16px"></span>' : `<input type="checkbox" class="history-check" data-id="${o.id}" onchange="updateBulkBtn()" style="cursor:pointer;flex:0 0 auto">`) : ''}
+            <span class="badge-platform ${pc[o.platform]||'badge-cafe24'}" style="flex:0 0 auto">${o.platform||'기타'}</span>
+            <div style="min-width:0;flex:1">
+                <div style="font-size:13px;font-weight:600">${prod?.name||'삭제됨'} <span style="font-weight:400;color:#71717a">${vari?'· '+vari.color+' / '+vari.size:''}</span></div>
+                <div style="font-size:11px;color:#a1a1aa;margin-top:2px">${o.memo||tl[o.type]||o.type}</div>
+            </div>
+            <span class="badge ${_typeBadge(o.type)}" style="font-size:10px;flex:0 0 auto">${tl[o.type]||o.type}</span>
+            <span style="min-width:42px;text-align:right;font-weight:700;color:${cancelled?'#a1a1aa':deduct?'#dc2626':'#16a34a'}">${deduct?'-':cancelled?'':'+'}${o.quantity}</span>
+            ${cancelled ? '' : `<button class="btn btn-outline-danger btn-sm" style="font-size:11px;padding:2px 8px;flex:0 0 auto" onclick="cancelOrder('${o.id}')">취소</button>`}
+        </div>`;
+    });
+    return html;
+}
+
 function renderHistory() {
     const pf = document.getElementById('history-platform-filter')?.value || '';
     const tf = document.getElementById('history-type-filter')?.value    || '';
@@ -4262,8 +4345,11 @@ function renderHistory() {
     });
 
     const combined = [
-        ...Object.values(batchMap).map(g => ({ sortKey: g.date + '_' + g.batch_id, type: 'batch', data: g })),
-        ...regularOrders.map(o => ({ sortKey: o.date + '_' + o.id, type: 'order', data: o }))
+        ...Object.values(batchMap).map(g => ({
+            sortKey: g.orders.reduce((latest, o) => o.created_at > latest ? o.created_at : latest, g.date),
+            type: 'batch', data: g
+        })),
+        ...regularOrders.map(o => ({ sortKey: o.created_at || o.date, type: 'order', data: o }))
     ].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
 
     const total = combined.length;
@@ -4271,15 +4357,8 @@ function renderHistory() {
     if (_historyPage > totalPages) _historyPage = totalPages;
     const pageItems = combined.slice((_historyPage - 1) * HISTORY_PER_PAGE, _historyPage * HISTORY_PER_PAGE);
 
-    const pageBatchMap = {};
-    const pageRegular = [];
-    pageItems.forEach(item => {
-        if (item.type === 'batch') pageBatchMap[item.data.batch_id] = item.data;
-        else pageRegular.push(item.data);
-    });
-
     const el = document.getElementById('history-table-container');
-    el.innerHTML = _renderHistoryHtml(pageBatchMap, pageRegular, true) + _paginator(_historyPage, totalPages, 'setHistoryPage');
+    el.innerHTML = _renderUnifiedHistory(pageItems, true) + _paginator(_historyPage, totalPages, 'setHistoryPage');
     updateBulkBtn();
 }
 
