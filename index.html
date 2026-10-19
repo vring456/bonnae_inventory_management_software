@@ -52,6 +52,7 @@
         .sidebar .nav-link:hover { background: rgba(255,255,255,0.08); color: white; }
         .sidebar .nav-link.active { background: var(--accent); color: white; }
         .sidebar .nav-link[data-page="sponsor"].active { background: #7c3aed; }
+        .sidebar .nav-link[data-page="store"].active { background: #ea580c; }
         .sidebar-footer { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); }
         .online-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; }
 
@@ -70,7 +71,25 @@
         .badge-cafe24  { background: #dcfce7; color: #166534; }
         .badge-kream   { background: #dbeafe; color: #1e40af; }
         .badge-sampleas{ background: #fce7f3; color: #9d174d; }
+        .badge-offline { background: #ffedd5; color: #9a3412; }
         .badge-platform{ padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+
+        /* Offline store kiosk */
+        .store-product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; max-height:430px; overflow-y:auto; padding:2px; }
+        .store-product-btn { min-height:72px; border:1.5px solid #e4e4e7; border-radius:12px; background:white; padding:10px; text-align:left; font-size:13px; font-weight:650; color:#27272a; transition:.15s; }
+        .store-product-btn > span { display:block; line-height:1.35; }
+        .store-product-btn > small { display:block; margin-top:7px; color:#71717a; font-size:11px; font-weight:550; }
+        .store-product-btn:hover, .store-product-btn.active { border-color:#f97316; background:#fff7ed; color:#9a3412; }
+        .store-choice-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .store-choice-btn { min-width:72px; min-height:50px; border:1.5px solid #d4d4d8; border-radius:10px; background:white; padding:8px 12px; font-size:13px; font-weight:650; }
+        .store-choice-btn > b { display:block; font-size:14px; line-height:1.2; }
+        .store-choice-btn > small { display:block; margin-top:6px; color:#71717a; font-size:11px; font-weight:500; line-height:1.2; }
+        .store-choice-btn.active { border-color:#f97316; background:#fff7ed; color:#c2410c; }
+        .store-choice-btn:disabled { opacity:.38; background:#f4f4f5; text-decoration:line-through; }
+        .store-cart-card { position:sticky; top:24px; }
+        .store-pay-btn { flex:1; min-height:46px; border:1.5px solid #d4d4d8; background:white; border-radius:10px; font-weight:650; }
+        .store-pay-btn.active { background:#18181b; border-color:#18181b; color:white; }
+        @media (max-width: 991px) { .store-cart-card { position:static; } .store-product-grid { max-height:none; } }
 
         /* Table */
         .table th { font-size: 12px; font-weight: 600; color: #71717a; border-bottom: 2px solid #f4f4f5; }
@@ -281,6 +300,7 @@
     <nav>
         <a href="#" class="nav-link active" data-page="dashboard"><i class="fas fa-chart-bar fa-fw"></i> 대시보드</a>
         <a href="#" class="nav-link" data-page="products"><i class="fas fa-shirt fa-fw"></i> 상품 관리</a>
+        <a href="#" class="nav-link" data-page="store" style="color:#fed7aa"><i class="fas fa-cash-register fa-fw"></i> 오프라인 매장</a>
         <a href="#" class="nav-link" data-page="orders"><i class="fas fa-arrow-right-arrow-left fa-fw"></i> 주문 반영</a>
         <a href="#" class="nav-link" data-page="sponsor" style="color:#c4b5fd"><i class="fas fa-gift fa-fw"></i> 협찬</a>
         <a href="#" class="nav-link" data-page="history"><i class="fas fa-clock-rotate-left fa-fw"></i> 이력</a>
@@ -389,70 +409,97 @@
         </div>
     </div>
 
+    <!-- OFFLINE STORE -->
+    <div id="store" class="page">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div>
+                <div class="page-title mb-1">오프라인 매장</div>
+                <div class="text-muted" style="font-size:12px">상품 → 컬러 → 사이즈를 눌러 장바구니에 담으세요.</div>
+            </div>
+            <button class="btn btn-outline-danger btn-sm" id="store-undo-btn" style="display:none" onclick="undoLastStoreSale()">
+                <i class="fas fa-rotate-left me-1"></i>방금 판매 취소
+            </button>
+        </div>
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="card-box mb-3">
+                    <div class="d-flex gap-2 flex-wrap mb-3">
+                        <select class="form-select" id="store-season" onchange="_storeSeason=this.value;_storeProductId=null;renderStore()" style="width:auto"></select>
+                        <div class="position-relative flex-grow-1" style="min-width:210px">
+                            <i class="fas fa-search position-absolute" style="left:13px;top:50%;transform:translateY(-50%);color:#a1a1aa"></i>
+                            <input class="form-control" id="store-search" placeholder="상품명 또는 SKU 검색" oninput="_storeSearch=this.value;renderStoreProducts()" style="padding-left:38px">
+                        </div>
+                    </div>
+                    <div class="store-product-grid" id="store-products"></div>
+                </div>
+                <div class="card-box" id="store-options">
+                    <div class="empty-state" style="padding:30px"><i class="fas fa-hand-pointer"></i>상품을 선택하세요</div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card-box store-cart-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="section-title mb-0">장바구니</div>
+                        <button class="btn btn-link btn-sm text-muted p-0" onclick="clearStoreCart()">전체 비우기</button>
+                    </div>
+                    <div id="store-cart"></div>
+                    <div class="d-flex justify-content-between align-items-center py-3 mt-2" style="border-top:2px solid #f4f4f5">
+                        <span style="font-weight:650">총 수량</span>
+                        <strong id="store-cart-total" style="font-size:22px">0개</strong>
+                    </div>
+                    <div class="section-title mb-2">결제수단</div>
+                    <div class="d-flex gap-2 mb-3" id="store-payments">
+                        <button class="store-pay-btn active" onclick="setStorePayment('카드',this)">카드</button>
+                        <button class="store-pay-btn" onclick="setStorePayment('현금',this)">현금</button>
+                        <button class="store-pay-btn" onclick="setStorePayment('계좌이체',this)">이체</button>
+                    </div>
+                    <button class="btn w-100" id="store-checkout-btn" onclick="submitStoreSale()" disabled
+                        style="height:58px;background:#f97316;color:white;font-size:17px;font-weight:750;border-radius:12px">
+                        판매 완료
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ORDERS -->
     <div id="orders" class="page">
         <div class="page-title">주문 반영</div>
         <div class="platform-tabs">
-            <button class="platform-tab active" data-tab="manual">수동 입력</button>
+            <button class="platform-tab active" data-tab="manual">빠른 입력</button>
             <button class="platform-tab" data-tab="kream">크림 엑셀 업로드</button>
             <button class="platform-tab" data-tab="sampleas">샘플라스 엑셀 업로드</button>
             <button class="platform-tab" data-tab="cafe24">카페24 CSV 업로드</button>
-            <button class="platform-tab" data-tab="sponsor-sale">📦 묶음 판매</button>
             <button class="platform-tab" data-tab="image-order">📊 엑셀 주문서</button>
         </div>
         <!-- Manual -->
         <div id="tab-manual" class="tab-pane">
-            <div class="card-box" style="max-width:480px">
-                <div class="section-title">수동 재고 조정</div>
-                <div class="mb-3">
-                    <label class="form-label">플랫폼</label>
-                    <select class="form-select" id="manual-platform">
-                        <option value="카페24">카페24</option><option value="크림">크림</option>
-                        <option value="샘플라스">샘플라스</option><option value="협찬">협찬</option><option value="기타">기타</option>
-                    </select>
+            <div class="card-box mb-3">
+                <div class="section-title">주문 기본 정보</div>
+                <div class="row g-3">
+                    <div class="col-md-3"><label class="form-label">플랫폼</label><select class="form-select" id="oq-platform"><option value="카페24">카페24</option><option value="크림">크림</option><option value="샘플라스">샘플라스</option><option value="오프라인">오프라인</option><option value="직접수정">직접수정</option><option value="기타">기타</option></select></div>
+                    <div class="col-md-3"><label class="form-label">유형</label><select class="form-select" id="oq-type" onchange="renderOrderQuick()"><option value="sale">판매 (차감)</option><option value="restock">입고 (추가)</option><option value="return">반품 (추가)</option><option value="sample_out">샘플 출고 (차감)</option><option value="sample_in">샘플 입고 (추가)</option><option value="b_sale">B급 판매 (차감)</option><option value="b_in">B급 입고 (추가)</option></select></div>
+                    <div class="col-md-3"><label class="form-label">날짜</label><input type="date" class="form-control" id="oq-date"></div>
+                    <div class="col-md-3"><label class="form-label">메모 <span class="text-muted" style="font-size:11px">(선택)</span></label><input type="text" class="form-control" id="oq-memo" placeholder="주문번호 등"></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">유형</label>
-                    <select class="form-select" id="manual-type" onchange="updateVariantOptions()">
-                        <option value="sale">판매 (차감)</option>
-                        <option value="restock">입고 (추가)</option>
-                        <option value="return">반품 (추가)</option>
-                        <option disabled>──────────</option>
-                        <option value="sample_out">샘플 출고 (차감)</option>
-                        <option value="sample_in">샘플 입고 (추가)</option>
-                        <option value="sponsor_out">협찬 출고 (차감)</option>
-                        <option value="sponsor_in">협찬 회수 (추가)</option>
-                        <option disabled>──────────</option>
-                        <option value="b_sale">B급 판매 (차감)</option>
-                        <option value="b_in">B급 입고 (추가)</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">상품</label>
-                    <div class="position-relative">
-                        <i class="fas fa-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);color:#a1a1aa;font-size:13px"></i>
-                        <input type="text" class="form-control" id="manual-product-input"
-                            placeholder="상품명 검색..." autocomplete="off" style="padding-left:32px"
-                            oninput="filterProductSuggestions()"
-                            onfocus="filterProductSuggestions()">
-                        <div id="product-suggestions"></div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="card-box mb-3">
+                        <div class="d-flex gap-2 flex-wrap mb-3"><select class="form-select" id="oq-season" onchange="_orderQuickSeason=this.value;_orderQuickProductId=null;renderOrderQuick()" style="width:auto"></select><div class="position-relative flex-grow-1" style="min-width:210px"><i class="fas fa-search position-absolute" style="left:13px;top:50%;transform:translateY(-50%);color:#a1a1aa"></i><input class="form-control" id="oq-search" placeholder="상품명 또는 SKU 검색" oninput="_orderQuickSearch=this.value;renderOrderQuickProducts()" style="padding-left:38px"></div></div>
+                        <div class="store-product-grid" id="oq-products"></div>
                     </div>
-                    <input type="hidden" id="manual-product-id">
-                    <div id="manual-product-selected" class="mt-2" style="display:none;font-size:13px;color:#6366f1;font-weight:600"></div>
+                    <div class="card-box" id="oq-options"><div class="empty-state" style="padding:30px"><i class="fas fa-hand-pointer"></i>상품을 선택하세요</div></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">색상 / 사이즈</label>
-                    <select class="form-select" id="manual-variant"><option value="">먼저 상품을 선택하세요</option></select>
+                <div class="col-lg-4">
+                    <div class="card-box store-cart-card">
+                        <div class="d-flex justify-content-between align-items-center mb-3"><div class="section-title mb-0">반영 목록</div><button class="btn btn-link btn-sm text-muted p-0" onclick="clearOrderQuickCart()">전체 비우기</button></div>
+                        <div id="oq-cart"></div>
+                        <div class="d-flex justify-content-between align-items-center py-3 mt-2" style="border-top:2px solid #f4f4f5"><span style="font-weight:650">총 수량</span><strong id="oq-total" style="font-size:22px">0개</strong></div>
+                        <button class="btn btn-accent w-100" id="oq-submit" style="height:56px;font-size:16px;font-weight:700;border-radius:12px" onclick="submitOrderQuick()" disabled>재고 반영하기</button>
+                        <div class="text-muted text-center mt-2" style="font-size:11px">여러 상품은 자동으로 하나의 묶음 이력에 저장돼요.</div>
+                    </div>
                 </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-6"><label class="form-label">수량</label><input type="number" class="form-control" id="manual-qty" min="1" value="1"></div>
-                    <div class="col-6"><label class="form-label">날짜</label><input type="date" class="form-control" id="manual-date"></div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">메모 (선택)</label>
-                    <input type="text" class="form-control" id="manual-memo" placeholder="주문번호 등">
-                </div>
-                <button class="btn btn-accent w-100" onclick="submitManualOrder()">반영하기</button>
             </div>
         </div>
         <!-- Kream -->
@@ -632,26 +679,35 @@
 
         <!-- 출고 -->
         <div id="stab-out-pane">
-            <div class="card-box" style="max-width:680px">
+            <div class="card-box mb-3">
                 <div class="section-title" style="color:#8b5cf6">📦 협찬 묶음 출고</div>
-                <div class="row g-3 mb-4">
-                    <div class="col-8">
+                <div class="row g-3">
+                    <div class="col-md-6">
                         <label class="form-label">묶음 이름 <span class="text-muted" style="font-size:11px">(인플루언서명, 협찬명 등)</span></label>
                         <input type="text" class="form-control" id="batch-name" placeholder="예: 김민지, 2026SS 협찬">
                     </div>
-                    <div class="col-4">
+                    <div class="col-md-3">
                         <label class="form-label">날짜</label>
                         <input type="date" class="form-control" id="batch-date">
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label">새제품 출고</label>
+                        <div class="p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:600;line-height:1.4">
+                            상품을 담은 뒤 출고 목록에서<br><b>🆕 새제품 출고</b>로 바꿀 수 있어요.
+                        </div>
+                        <input type="hidden" id="sq-source" value="sample">
+                    </div>
                 </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="section-title mb-0">출고 상품 목록</div>
-                    <button class="btn btn-sm" style="border:1px solid #8b5cf6;color:#8b5cf6" onclick="addBatchItem()"><i class="fas fa-plus me-1"></i>상품 추가</button>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="card-box mb-3">
+                        <div class="d-flex gap-2 flex-wrap mb-3"><select class="form-select" id="sq-season" onchange="_sponsorQuickSeason=this.value;_sponsorQuickProductId=null;renderSponsorQuick()" style="width:auto"></select><div class="position-relative flex-grow-1" style="min-width:210px"><i class="fas fa-search position-absolute" style="left:13px;top:50%;transform:translateY(-50%);color:#a1a1aa"></i><input class="form-control" id="sq-search" placeholder="상품명 또는 SKU 검색" oninput="_sponsorQuickSearch=this.value;renderSponsorQuickProducts()" style="padding-left:38px"></div></div>
+                        <div class="store-product-grid" id="sq-products"></div>
+                    </div>
+                    <div class="card-box" id="sq-options"><div class="empty-state" style="padding:30px"><i class="fas fa-hand-pointer"></i>상품을 선택하세요</div></div>
                 </div>
-                <div id="batch-items"></div>
-                <button class="btn w-100 mt-3" style="background:#8b5cf6;color:white;font-weight:600" onclick="submitBatchOrder()">
-                    <i class="fas fa-box-open me-2"></i>협찬 묶음 출고 반영
-                </button>
+                <div class="col-lg-4"><div class="card-box store-cart-card"><div class="d-flex justify-content-between align-items-center mb-3"><div class="section-title mb-0" style="color:#8b5cf6">출고 목록</div><button class="btn btn-link btn-sm text-muted p-0" onclick="clearSponsorQuickCart()">전체 비우기</button></div><div id="sq-cart"></div><div class="d-flex justify-content-between align-items-center py-3 mt-2" style="border-top:2px solid #f4f4f5"><span style="font-weight:650">총 수량</span><strong id="sq-total" style="font-size:22px">0개</strong></div><button class="btn w-100" id="sq-submit" style="height:56px;background:#8b5cf6;color:white;font-size:16px;font-weight:700;border-radius:12px" onclick="submitSponsorQuick()" disabled><i class="fas fa-box-open me-2"></i>협찬 묶음 출고</button></div></div>
             </div>
         </div>
 
@@ -704,7 +760,7 @@
                 <select class="form-select form-select-sm" id="history-platform-filter" onchange="_historyPage=1;renderHistory()" style="width:auto">
                     <option value="">전체 플랫폼</option>
                     <option value="카페24">카페24</option><option value="크림">크림</option>
-                    <option value="샘플라스">샘플라스</option><option value="협찬">협찬</option><option value="직접수정">직접수정</option>
+                    <option value="샘플라스">샘플라스</option><option value="오프라인">오프라인</option><option value="협찬">협찬</option><option value="직접수정">직접수정</option>
                 </select>
                 <select class="form-select form-select-sm" id="history-type-filter" onchange="_historyPage=1;renderHistory()" style="width:auto">
                     <option value="">전체 유형</option>
@@ -1022,6 +1078,29 @@
     </div>
 
 </main>
+
+<!-- QUICK PRODUCT PICKER (주문/협찬 공용) -->
+<div class="modal fade" id="quickPickerModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header">
+            <div><h5 class="modal-title fw-bold mb-1">버튼으로 상품 선택</h5><div class="text-muted" style="font-size:12px" id="quick-picker-help">상품 → 컬러 → 사이즈 순서로 누르세요.</div></div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <select class="form-select" id="quick-picker-season" onchange="_quickPickerSeason=this.value;_quickPickerProductId=null;renderQuickPicker()" style="width:auto"></select>
+                <div class="position-relative flex-grow-1" style="min-width:220px">
+                    <i class="fas fa-search position-absolute" style="left:13px;top:50%;transform:translateY(-50%);color:#a1a1aa"></i>
+                    <input class="form-control" id="quick-picker-search" placeholder="상품명 또는 SKU 검색" oninput="_quickPickerSearch=this.value;renderQuickPickerProducts()" style="padding-left:38px">
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-7"><div class="store-product-grid" id="quick-picker-products"></div></div>
+                <div class="col-lg-5"><div class="p-3 rounded" style="border:1px solid #e4e4e7;min-height:220px" id="quick-picker-options"></div></div>
+            </div>
+        </div>
+    </div></div>
+</div>
 
 <!-- BATCH ITEM ADD MODAL -->
 <div class="modal fade" id="batchAddModal" tabindex="-1">
@@ -1366,17 +1445,22 @@ function subscribeRealtime() {
             await refreshVariants();
             renderDashboard();
             if (document.getElementById('products').classList.contains('active')) renderProducts();
+            if (document.getElementById('store').classList.contains('active')) renderStore();
+            if (document.getElementById('orders').classList.contains('active')) renderOrderQuick();
+            if (document.getElementById('sponsor').classList.contains('active')) renderSponsorQuick();
             flashNotify(`재고 업데이트됨`);
         })
         .on('postgres_changes', { event:'*', schema:'public', table:'orders' }, async (payload) => {
             await refreshOrders();
             renderDashboard();
             if (document.getElementById('history').classList.contains('active')) renderHistory();
+            if (document.getElementById('store').classList.contains('active')) renderStore();
         })
         .on('postgres_changes', { event:'*', schema:'public', table:'products' }, async () => {
             await refreshProducts();
             renderProducts();
             renderDashboard();
+            if (document.getElementById('store').classList.contains('active')) initStore();
         })
         .subscribe();
 }
@@ -1428,6 +1512,7 @@ async function navigate(page) {
     await refreshOrders();
     if (page === 'dashboard') renderDashboard();
     if (page === 'products')  renderProducts();
+    if (page === 'store')     initStore();
     if (page === 'history')   renderHistory();
     if (page === 'settings')  loadSettingsPage();
     if (page === 'orders')    initOrders();
@@ -1457,6 +1542,275 @@ function getVariantsByProduct(productId) {
     return _variants.filter(v => v.product_id === productId);
 }
 
+// =====================
+// OFFLINE STORE KIOSK
+// =====================
+let _storeSeason = null;
+let _storeSearch = '';
+let _storeProductId = null;
+let _storeColor = '';
+let _storeCart = [];
+let _storePayment = '카드';
+let _lastStoreBatchId = null;
+
+function _html(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function initStore() {
+    const seasons = [...new Set(_products.map(p => p.season).filter(Boolean))]
+        .sort((a,b) => _seasonRank(b) - _seasonRank(a) || a.localeCompare(b, 'en', { sensitivity:'base', numeric:true }));
+    if (_storeSeason === null || (_storeSeason && !seasons.includes(_storeSeason))) _storeSeason = seasons[0] || '';
+    const seasonEl = document.getElementById('store-season');
+    seasonEl.innerHTML = '<option value="">전체 시즌</option>' + seasons.map(s => `<option value="${_html(s)}">${_html(s)}</option>`).join('');
+    seasonEl.value = _storeSeason;
+    document.getElementById('store-search').value = _storeSearch;
+    document.getElementById('store-undo-btn').style.display = _lastStoreBatchId ? 'inline-block' : 'none';
+    renderStore();
+}
+
+function renderStore() {
+    renderStoreProducts();
+    renderStoreOptions();
+    renderStoreCart();
+}
+
+function renderStoreProducts() {
+    const q = (_storeSearch || '').trim().toLowerCase();
+    const products = _products.filter(p => (!_storeSeason || p.season === _storeSeason) && (!q || `${p.name||''} ${p.sku||''}`.toLowerCase().includes(q)))
+        .sort((a,b) => (a.name||'').localeCompare(b.name||'', 'en', { sensitivity:'base', numeric:true }));
+    const el = document.getElementById('store-products');
+    if (!products.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:35px 10px"><i class="fas fa-search"></i>해당 상품이 없어요</div>'; return; }
+    el.innerHTML = products.map(p => {
+        const stock = getVariantsByProduct(p.id).reduce((s,v)=>s+Math.max(0,v.stock||0),0);
+        return `<button class="store-product-btn ${p.id===_storeProductId?'active':''}" onclick="selectStoreProduct('${p.id}')">
+            <span>${_html(p.name)}</span><small>재고 ${stock}</small>
+        </button>`;
+    }).join('');
+}
+
+function selectStoreProduct(productId) {
+    _storeProductId = productId;
+    _storeColor = '';
+    renderStoreProducts();
+    renderStoreOptions();
+}
+
+function selectStoreColor(encodedColor) {
+    _storeColor = decodeURIComponent(encodedColor);
+    renderStoreOptions();
+}
+
+function renderStoreOptions() {
+    const el = document.getElementById('store-options');
+    const product = _products.find(p => p.id === _storeProductId);
+    if (!product) { el.innerHTML = '<div class="empty-state" style="padding:45px 10px"><i class="fas fa-hand-pointer"></i>왼쪽에서 상품을 선택하세요</div>'; return; }
+    const variants = getVariantsByProduct(product.id).sort((a,b)=>(a.color||'').localeCompare(b.color||'','en',{sensitivity:'base'}) || (a.size||'').localeCompare(b.size||'','en',{numeric:true}));
+    const colors = [...new Set(variants.map(v=>v.color||'기본'))];
+    if (!colors.includes(_storeColor)) _storeColor = colors[0] || '';
+    const chosen = variants.filter(v => (v.color||'기본') === _storeColor);
+    el.innerHTML = `<div style="font-size:18px;font-weight:800;margin-bottom:4px">${_html(product.name)}</div>
+        <div style="font-size:12px;color:#71717a;margin-bottom:16px">${_html(product.season||'')} ${product.sku?'· '+_html(product.sku):''}</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div>
+        <div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_storeColor?'active':''}" onclick="selectStoreColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:7px">사이즈 <span style="font-weight:400;color:#a1a1aa">(누르면 바로 담겨요)</span></div>
+        <div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" ${v.stock<=0?'disabled':''} onclick="addStoreVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>재고 ${v.stock||0}</small></button>`).join('') || '<span style="color:#a1a1aa">등록된 옵션이 없어요</span>'}</div>`;
+}
+
+function addStoreVariant(variantId) {
+    const variant = _variants.find(v => v.id === variantId);
+    if (!variant || variant.stock <= 0) { showToast('판매 가능한 재고가 없어요.', 'danger'); return; }
+    const item = _storeCart.find(x => x.variantId === variantId);
+    const nextQty = (item?.qty || 0) + 1;
+    if (nextQty > variant.stock) { showToast(`현재 재고는 ${variant.stock}개예요.`, 'danger'); return; }
+    if (item) item.qty = nextQty; else _storeCart.push({ variantId, qty:1 });
+    renderStoreCart();
+}
+
+function changeStoreCartQty(variantId, delta) {
+    const item = _storeCart.find(x => x.variantId === variantId);
+    const variant = _variants.find(v => v.id === variantId);
+    if (!item || !variant) return;
+    const next = item.qty + delta;
+    if (next <= 0) _storeCart = _storeCart.filter(x => x.variantId !== variantId);
+    else if (next > variant.stock) showToast(`현재 재고는 ${variant.stock}개예요.`, 'danger');
+    else item.qty = next;
+    renderStoreCart();
+}
+
+function removeStoreCartItem(variantId) { _storeCart = _storeCart.filter(x => x.variantId !== variantId); renderStoreCart(); }
+function clearStoreCart() { if (_storeCart.length && !confirm('담은 상품을 모두 비울까요?')) return; _storeCart=[]; renderStoreCart(); }
+
+function renderStoreCart() {
+    const el = document.getElementById('store-cart');
+    _storeCart = _storeCart.filter(x => _variants.some(v => v.id === x.variantId));
+    const total = _storeCart.reduce((s,x)=>s+x.qty,0);
+    document.getElementById('store-cart-total').textContent = `${total}개`;
+    document.getElementById('store-checkout-btn').disabled = total === 0;
+    if (!total) { el.innerHTML = '<div class="empty-state" style="padding:35px 5px"><i class="fas fa-shopping-basket"></i>사이즈 버튼을 눌러 담으세요</div>'; return; }
+    el.innerHTML = _storeCart.map(item => {
+        const v = _variants.find(x => x.id === item.variantId), p = _products.find(x => x.id === v?.product_id);
+        return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5">
+            <div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeStoreCartItem('${item.variantId}')"><i class="fas fa-times"></i></button></div>
+            <div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeStoreCartQty('${item.variantId}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeStoreCartQty('${item.variantId}',1)">+</button></div>
+        </div>`;
+    }).join('');
+}
+
+function setStorePayment(payment, button) {
+    _storePayment = payment;
+    document.querySelectorAll('.store-pay-btn').forEach(b=>b.classList.remove('active'));
+    button.classList.add('active');
+}
+
+function _localDateParts() {
+    const d = new Date(), pad = n => String(n).padStart(2,'0');
+    return { date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, time:`${pad(d.getHours())}:${pad(d.getMinutes())}` };
+}
+
+async function submitStoreSale() {
+    if (!_storeCart.length) return;
+    for (const item of _storeCart) {
+        const v = _variants.find(x=>x.id===item.variantId);
+        if (!v || item.qty > v.stock) { showToast('재고가 바뀐 상품이 있어요. 수량을 다시 확인해주세요.', 'danger'); await refreshVariants(); renderStore(); return; }
+    }
+    const total = _storeCart.reduce((s,x)=>s+x.qty,0);
+    if (!confirm(`오프라인 판매 ${total}개를 완료할까요?\n결제: ${_storePayment}`)) return;
+    showLoading('오프라인 판매 처리 중...');
+    const {date,time} = _localDateParts();
+    const batchId = uid();
+    const batchName = `오프라인 ${date} ${time} · ${_storePayment} (${total}개)`;
+    const sales = _storeCart.map(x=>({...x}));
+    try {
+        for (const item of sales) {
+            const v = _variants.find(x=>x.id===item.variantId);
+            const result = await sb.from('variants').update({stock:v.stock-item.qty}).eq('id',v.id);
+            if (result.error) throw result.error;
+            v.stock -= item.qty;
+            const orderResult = await sb.from('orders').insert({ date, platform:'오프라인', product_id:v.product_id, variant_id:v.id, quantity:item.qty, type:'sale', memo:`오프라인 ${_storePayment} 결제`, batch_id:batchId, batch_name:batchName });
+            if (orderResult.error) throw orderResult.error;
+        }
+        _lastStoreBatchId = batchId;
+        _storeCart = [];
+        await refreshOrders();
+        document.getElementById('store-undo-btn').style.display = 'inline-block';
+        renderStore(); renderDashboard();
+        showToast(`오프라인 판매 ${total}개가 반영됐어요.`);
+    } catch(e) {
+        console.error(e);
+        showToast('일부 반영 중 오류가 발생했어요. 이력을 확인해주세요.', 'danger');
+        await refreshProducts(); await refreshOrders(); renderStore();
+    }
+    hideLoading();
+}
+
+async function undoLastStoreSale() {
+    if (!_lastStoreBatchId) return;
+    await cancelBatch(_lastStoreBatchId);
+    if (!_orders.some(o=>o.batch_id===_lastStoreBatchId && o.type!=='cancel')) {
+        _lastStoreBatchId = null;
+        document.getElementById('store-undo-btn').style.display = 'none';
+    }
+    renderStore();
+}
+
+// 주문 반영 / 협찬 공용 버튼식 상품 선택기
+let _quickPickerTarget = 'manual';
+let _quickPickerRowId = null;
+let _quickPickerSeason = null;
+let _quickPickerSearch = '';
+let _quickPickerProductId = null;
+let _quickPickerColor = '';
+
+function openQuickPicker(target, rowId=null) {
+    _quickPickerTarget = target;
+    _quickPickerRowId = rowId;
+    _quickPickerProductId = null;
+    _quickPickerColor = '';
+    const seasons = [...new Set(_products.map(p=>p.season).filter(Boolean))]
+        .sort((a,b)=>_seasonRank(b)-_seasonRank(a) || a.localeCompare(b,'en',{sensitivity:'base',numeric:true}));
+    if (_quickPickerSeason === null || (_quickPickerSeason && !seasons.includes(_quickPickerSeason))) _quickPickerSeason = seasons[0] || '';
+    const seasonEl = document.getElementById('quick-picker-season');
+    seasonEl.innerHTML = '<option value="">전체 시즌</option>' + seasons.map(s=>`<option value="${_html(s)}">${_html(s)}</option>`).join('');
+    seasonEl.value = _quickPickerSeason;
+    document.getElementById('quick-picker-search').value = _quickPickerSearch;
+    document.getElementById('quick-picker-help').textContent = target === 'sponsor'
+        ? '협찬 상품 → 컬러 → 사이즈를 누르면 해당 출고 줄에 바로 입력돼요.'
+        : '주문 상품 → 컬러 → 사이즈를 누르면 수동 입력란에 바로 입력돼요.';
+    renderQuickPicker();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('quickPickerModal')).show();
+}
+
+function renderQuickPicker() {
+    renderQuickPickerProducts();
+    renderQuickPickerOptions();
+}
+
+function renderQuickPickerProducts() {
+    const q = (_quickPickerSearch||'').trim().toLowerCase();
+    const products = _products.filter(p=>(!_quickPickerSeason || p.season===_quickPickerSeason) && (!q || `${p.name||''} ${p.sku||''}`.toLowerCase().includes(q)))
+        .sort((a,b)=>(a.name||'').localeCompare(b.name||'','en',{sensitivity:'base',numeric:true}));
+    const el = document.getElementById('quick-picker-products');
+    if (!products.length) { el.innerHTML='<div class="empty-state" style="grid-column:1/-1;padding:35px 10px"><i class="fas fa-search"></i>해당 상품이 없어요</div>'; return; }
+    el.innerHTML = products.map(p=>{
+        const variants = getVariantsByProduct(p.id);
+        const available = variants.reduce((s,v)=>s+Math.max(0,_quickPickerTarget==='sponsor'?(v.sample_stock||0):_quickPickerStock(v)),0);
+        const label = _quickPickerTarget==='sponsor' ? '샘플재고' : '재고';
+        return `<button class="store-product-btn ${p.id===_quickPickerProductId?'active':''}" onclick="selectQuickPickerProduct('${p.id}')"><span>${_html(p.name)}</span><small>${label} ${available}</small></button>`;
+    }).join('');
+}
+
+function _quickPickerStock(v) {
+    if (_quickPickerTarget !== 'manual') return v.sample_stock||0;
+    const type = document.getElementById('manual-type')?.value || 'sale';
+    return v[_stockField(type)] || 0;
+}
+
+function selectQuickPickerProduct(productId) {
+    _quickPickerProductId = productId;
+    _quickPickerColor = '';
+    renderQuickPickerProducts();
+    renderQuickPickerOptions();
+}
+
+function selectQuickPickerColor(encodedColor) {
+    _quickPickerColor = decodeURIComponent(encodedColor);
+    renderQuickPickerOptions();
+}
+
+function renderQuickPickerOptions() {
+    const el = document.getElementById('quick-picker-options');
+    const product = _products.find(p=>p.id===_quickPickerProductId);
+    if (!product) { el.innerHTML='<div class="empty-state" style="padding:45px 10px"><i class="fas fa-hand-pointer"></i>왼쪽에서 상품을 선택하세요</div>'; return; }
+    const variants = getVariantsByProduct(product.id).sort((a,b)=>(a.color||'').localeCompare(b.color||'','en',{sensitivity:'base'}) || (a.size||'').localeCompare(b.size||'','en',{numeric:true}));
+    const colors = [...new Set(variants.map(v=>v.color||'기본'))];
+    if (!colors.includes(_quickPickerColor)) _quickPickerColor=colors[0]||'';
+    const chosen = variants.filter(v=>(v.color||'기본')===_quickPickerColor);
+    const label = _quickPickerTarget==='sponsor' ? '샘플재고' : (_stockField(document.getElementById('manual-type')?.value||'sale')==='sample_stock'?'샘플재고':_stockField(document.getElementById('manual-type')?.value||'sale')==='b_stock'?'B급재고':'재고');
+    el.innerHTML = `<div style="font-size:18px;font-weight:800;margin-bottom:16px">${_html(product.name)}</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div>
+        <div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_quickPickerColor?'active':''}" onclick="selectQuickPickerColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:7px">사이즈 <span style="font-weight:400;color:#a1a1aa">(선택하면 입력 완료)</span></div>
+        <div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" onclick="applyQuickPickerVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>${label} ${_quickPickerTarget==='sponsor'?(v.sample_stock||0):_quickPickerStock(v)}</small></button>`).join('')}</div>`;
+}
+
+function applyQuickPickerVariant(variantId) {
+    const variant = _variants.find(v=>v.id===variantId);
+    const product = _products.find(p=>p.id===variant?.product_id);
+    if (!variant || !product) return;
+    if (_quickPickerTarget === 'sponsor') {
+        const row = document.getElementById('bir-'+_quickPickerRowId);
+        if (!row) { showToast('협찬 입력 줄을 찾을 수 없어요.', 'danger'); return; }
+        selectBatchProduct(_quickPickerRowId, product.id, product.name);
+        document.getElementById('bvs-'+_quickPickerRowId).value = variant.id;
+    } else {
+        selectManualProduct(product.id, product.name);
+        document.getElementById('manual-variant').value = variant.id;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('quickPickerModal'))?.hide();
+    showToast(`${product.name} · ${variant.color} / ${variant.size} 선택됐어요.`);
+}
+
 let _dashboardLowStockSeason = null;
 
 function renderDashboard() {
@@ -1479,7 +1833,7 @@ function renderDashboard() {
     const qtyColor    = qtyDiff > 0 ? '#16a34a' : qtyDiff < 0 ? '#dc2626' : '#71717a';
 
     // 플랫폼별 이번달 판매
-    const platforms = ['카페24','크림','샘플라스'];
+    const platforms = ['카페24','크림','샘플라스','오프라인'];
     const pfSales   = Object.fromEntries(platforms.map(p => [p, thisSales.filter(o=>o.platform===p).reduce((s,o)=>s+o.quantity,0)]));
     const maxPf     = Math.max(...Object.values(pfSales), 1);
 
@@ -1523,7 +1877,7 @@ function renderDashboard() {
     const zeroItems = seasonVariants.filter(v => v.stock < 0).sort((a,b)=>a.stock-b.stock);
 
     // ── KPI 카드 ──
-    const pClass = {'카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas'};
+    const pClass = {'카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline'};
     const tl = { sale:'판매', restock:'입고', return:'반품', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고', cancel:'취소' };
 
     document.getElementById('dash-kpi').innerHTML = `
@@ -1557,7 +1911,7 @@ function renderDashboard() {
         </div>`;
 
     // ── 플랫폼별 판매 ──
-    const pfColors = { '카페24':'#6366f1', '크림':'#18181b', '샘플라스':'#16a34a' };
+    const pfColors = { '카페24':'#6366f1', '크림':'#18181b', '샘플라스':'#16a34a', '오프라인':'#f97316' };
     document.getElementById('dash-platform').innerHTML = thisQty === 0
         ? '<div class="empty-state" style="padding:20px"><i class="fas fa-chart-bar"></i>이번달 판매 없음</div>'
         : platforms.map(p => {
@@ -2454,22 +2808,143 @@ async function saveEditedStock() {
 // =====================
 // ORDERS
 // =====================
+let _orderQuickSeason = null;
+let _orderQuickSearch = '';
+let _orderQuickProductId = null;
+let _orderQuickColor = '';
+let _orderQuickCart = [];
+
 function initOrders() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('manual-product-input').value = '';
-    document.getElementById('manual-product-id').value = '';
-    document.getElementById('manual-product-selected').style.display = 'none';
-    document.getElementById('manual-variant').innerHTML = '<option>먼저 상품을 선택하세요</option>';
-    document.getElementById('manual-date').value = today;
-    document.getElementById('sale-date').value   = today;
-    document.getElementById('img-date').value    = today;
+    document.getElementById('oq-date').value = document.getElementById('oq-date').value || today;
+    document.getElementById('sale-date').value = document.getElementById('sale-date').value || today;
+    document.getElementById('img-date').value = document.getElementById('img-date').value || today;
+    const seasons = [...new Set(_products.map(p=>p.season).filter(Boolean))]
+        .sort((a,b)=>_seasonRank(b)-_seasonRank(a) || a.localeCompare(b,'en',{sensitivity:'base',numeric:true}));
+    if (_orderQuickSeason === null || (_orderQuickSeason && !seasons.includes(_orderQuickSeason))) _orderQuickSeason = seasons[0] || '';
+    const seasonEl = document.getElementById('oq-season');
+    seasonEl.innerHTML = '<option value="">전체 시즌</option>' + seasons.map(s=>`<option value="${_html(s)}">${_html(s)}</option>`).join('');
+    seasonEl.value = _orderQuickSeason;
+    document.getElementById('oq-search').value = _orderQuickSearch;
+    renderOrderQuick();
+}
+
+function _orderQuickField() { return _stockField(document.getElementById('oq-type')?.value || 'sale'); }
+function _orderQuickStock(v) { return v?.[_orderQuickField()] || 0; }
+function _orderQuickStockLabel() { const f=_orderQuickField(); return f==='sample_stock'?'샘플재고':f==='b_stock'?'B급재고':'재고'; }
+
+function renderOrderQuick() { renderOrderQuickProducts(); renderOrderQuickOptions(); renderOrderQuickCart(); }
+
+function renderOrderQuickProducts() {
+    const q=(_orderQuickSearch||'').trim().toLowerCase();
+    const products=_products.filter(p=>(!_orderQuickSeason||p.season===_orderQuickSeason)&&(!q||`${p.name||''} ${p.sku||''}`.toLowerCase().includes(q)))
+        .sort((a,b)=>(a.name||'').localeCompare(b.name||'','en',{sensitivity:'base',numeric:true}));
+    const el=document.getElementById('oq-products');
+    if(!products.length){el.innerHTML='<div class="empty-state" style="grid-column:1/-1;padding:35px 10px"><i class="fas fa-search"></i>해당 상품이 없어요</div>';return;}
+    el.innerHTML=products.map(p=>{const stock=getVariantsByProduct(p.id).reduce((s,v)=>s+_orderQuickStock(v),0);return `<button class="store-product-btn ${p.id===_orderQuickProductId?'active':''}" onclick="selectOrderQuickProduct('${p.id}')"><span>${_html(p.name)}</span><small>${_orderQuickStockLabel()} ${stock}</small></button>`;}).join('');
+}
+
+function selectOrderQuickProduct(productId){_orderQuickProductId=productId;_orderQuickColor='';renderOrderQuickProducts();renderOrderQuickOptions();}
+function selectOrderQuickColor(encoded){_orderQuickColor=decodeURIComponent(encoded);renderOrderQuickOptions();}
+
+function renderOrderQuickOptions(){
+    const el=document.getElementById('oq-options'), product=_products.find(p=>p.id===_orderQuickProductId);
+    if(!product){el.innerHTML='<div class="empty-state" style="padding:45px 10px"><i class="fas fa-hand-pointer"></i>위에서 상품을 선택하세요</div>';return;}
+    const variants=getVariantsByProduct(product.id).sort((a,b)=>(a.color||'').localeCompare(b.color||'','en',{sensitivity:'base'})||(a.size||'').localeCompare(b.size||'','en',{numeric:true}));
+    const colors=[...new Set(variants.map(v=>v.color||'기본'))];if(!colors.includes(_orderQuickColor))_orderQuickColor=colors[0]||'';
+    const chosen=variants.filter(v=>(v.color||'기본')===_orderQuickColor);
+    el.innerHTML=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${_html(product.name)}</div><div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div><div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_orderQuickColor?'active':''}" onclick="selectOrderQuickColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div><div style="font-size:12px;font-weight:700;margin-bottom:7px">사이즈 <span style="font-weight:400;color:#a1a1aa">(누르면 목록에 담겨요)</span></div><div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" onclick="addOrderQuickVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>${_orderQuickStockLabel()} ${_orderQuickStock(v)}</small></button>`).join('')}</div>`;
+}
+
+function addOrderQuickVariant(variantId){const item=_orderQuickCart.find(x=>x.variantId===variantId);if(item)item.qty++;else _orderQuickCart.push({variantId,qty:1});renderOrderQuickCart();}
+function changeOrderQuickQty(variantId,delta){const item=_orderQuickCart.find(x=>x.variantId===variantId);if(!item)return;item.qty+=delta;if(item.qty<=0)_orderQuickCart=_orderQuickCart.filter(x=>x.variantId!==variantId);renderOrderQuickCart();}
+function removeOrderQuickItem(variantId){_orderQuickCart=_orderQuickCart.filter(x=>x.variantId!==variantId);renderOrderQuickCart();}
+function clearOrderQuickCart(){if(_orderQuickCart.length&&!confirm('반영 목록을 모두 비울까요?'))return;_orderQuickCart=[];renderOrderQuickCart();}
+
+function renderOrderQuickCart(){
+    const el=document.getElementById('oq-cart');_orderQuickCart=_orderQuickCart.filter(x=>_variants.some(v=>v.id===x.variantId));
+    const total=_orderQuickCart.reduce((s,x)=>s+x.qty,0);document.getElementById('oq-total').textContent=`${total}개`;document.getElementById('oq-submit').disabled=!total;
+    if(!total){el.innerHTML='<div class="empty-state" style="padding:35px 5px"><i class="fas fa-list-check"></i>사이즈 버튼을 눌러 담으세요</div>';return;}
+    el.innerHTML=_orderQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id);return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeOrderQuickItem('${item.variantId}')"><i class="fas fa-times"></i></button></div><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',1)">+</button></div></div>`;}).join('');
+}
+
+async function submitOrderQuick(){
+    if(!_orderQuickCart.length)return;
+    const platform=document.getElementById('oq-platform').value,type=document.getElementById('oq-type').value,date=document.getElementById('oq-date').value,memo=document.getElementById('oq-memo').value.trim();
+    if(!date){showToast('날짜를 선택하세요','danger');return;}
+    const total=_orderQuickCart.reduce((s,x)=>s+x.qty,0), isBatch=_orderQuickCart.length>1, batchId=isBatch?uid():null, batchName=isBatch?`${platform} ${date} (${_orderQuickCart.length}품목 · ${total}개)`:null;
+    if(!confirm(`${platform} ${isBatch?'묶음 ':''}${total}개를 재고에 반영할까요?`))return;
+    showLoading('재고 반영 중...');
+    try{
+        const field=_stockField(type), rows=[];
+        for(const item of _orderQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const next=(v[field]||0)+(_isDeduct(type)?-item.qty:item.qty);const vr=await sb.from('variants').update({[field]:next}).eq('id',v.id);if(vr.error)throw vr.error;v[field]=next;rows.push({date,platform,product_id:v.product_id,variant_id:v.id,quantity:item.qty,type,memo,...(isBatch?{batch_id:batchId,batch_name:batchName}:{})});}
+        const or=await sb.from('orders').insert(rows);if(or.error)throw or.error;
+        _orderQuickCart=[];document.getElementById('oq-memo').value='';await refreshOrders();renderOrderQuick();renderDashboard();showToast(`${isBatch?'묶음 ':''}${total}개가 반영됐어요.`);
+    }catch(e){console.error(e);showToast('반영 중 오류가 발생했어요. 이력을 확인해주세요.','danger');await refreshProducts();await refreshOrders();renderOrderQuick();}
+    hideLoading();
+}
+
+let _sponsorQuickSeason=null;
+let _sponsorQuickSearch='';
+let _sponsorQuickProductId=null;
+let _sponsorQuickColor='';
+let _sponsorQuickCart=[];
+
+function initSponsorQuick(){
+    const seasons=[...new Set(_products.map(p=>p.season).filter(Boolean))].sort((a,b)=>_seasonRank(b)-_seasonRank(a)||a.localeCompare(b,'en',{sensitivity:'base',numeric:true}));
+    if(_sponsorQuickSeason===null||(_sponsorQuickSeason&&!seasons.includes(_sponsorQuickSeason)))_sponsorQuickSeason=seasons[0]||'';
+    const el=document.getElementById('sq-season');el.innerHTML='<option value="">전체 시즌</option>'+seasons.map(s=>`<option value="${_html(s)}">${_html(s)}</option>`).join('');el.value=_sponsorQuickSeason;
+    document.getElementById('sq-search').value=_sponsorQuickSearch;updateSponsorSourceUI();
+}
+function _sponsorQuickSource(){return document.getElementById('sq-source')?.value||'sample';}
+function _sponsorQuickStock(v,source=_sponsorQuickSource()){return source==='new'?(v.stock||0):(v.sample_stock||0);}
+function _sponsorQuickLabel(source=_sponsorQuickSource()){return source==='new'?'새제품 재고':'샘플 재고';}
+function updateSponsorSourceUI(){
+    const isNew=_sponsorQuickSource()==='new',help=document.getElementById('sq-source-help'),select=document.getElementById('sq-source');
+    if(help){help.textContent=isNew?'🆕 판매재고에서 차감':'샘플재고에서 차감';help.style.color=isNew?'#2563eb':'#7c3aed';}
+    if(select){select.style.borderColor=isNew?'#60a5fa':'#c4b5fd';select.style.background=isNew?'#eff6ff':'#faf5ff';}
+    renderSponsorQuick();
+}
+function renderSponsorQuick(){renderSponsorQuickProducts();renderSponsorQuickOptions();renderSponsorQuickCart();}
+function renderSponsorQuickProducts(){
+    const q=(_sponsorQuickSearch||'').trim().toLowerCase(),products=_products.filter(p=>(!_sponsorQuickSeason||p.season===_sponsorQuickSeason)&&(!q||`${p.name||''} ${p.sku||''}`.toLowerCase().includes(q))).sort((a,b)=>(a.name||'').localeCompare(b.name||'','en',{sensitivity:'base',numeric:true}));
+    const el=document.getElementById('sq-products');if(!products.length){el.innerHTML='<div class="empty-state" style="grid-column:1/-1;padding:35px 10px"><i class="fas fa-search"></i>해당 상품이 없어요</div>';return;}
+    el.innerHTML=products.map(p=>{const stock=getVariantsByProduct(p.id).reduce((s,v)=>s+_sponsorQuickStock(v),0);return `<button class="store-product-btn ${p.id===_sponsorQuickProductId?'active':''}" onclick="selectSponsorQuickProduct('${p.id}')"><span>${_html(p.name)}</span><small>${_sponsorQuickLabel()} ${stock}</small></button>`;}).join('');
+}
+function selectSponsorQuickProduct(id){_sponsorQuickProductId=id;_sponsorQuickColor='';renderSponsorQuickProducts();renderSponsorQuickOptions();}
+function selectSponsorQuickColor(encoded){_sponsorQuickColor=decodeURIComponent(encoded);renderSponsorQuickOptions();}
+function renderSponsorQuickOptions(){
+    const el=document.getElementById('sq-options'),product=_products.find(p=>p.id===_sponsorQuickProductId);if(!product){el.innerHTML='<div class="empty-state" style="padding:45px 10px"><i class="fas fa-hand-pointer"></i>위에서 상품을 선택하세요</div>';return;}
+    const variants=getVariantsByProduct(product.id).sort((a,b)=>(a.color||'').localeCompare(b.color||'','en',{sensitivity:'base'})||(a.size||'').localeCompare(b.size||'','en',{numeric:true})),colors=[...new Set(variants.map(v=>v.color||'기본'))];if(!colors.includes(_sponsorQuickColor))_sponsorQuickColor=colors[0]||'';const chosen=variants.filter(v=>(v.color||'기본')===_sponsorQuickColor);
+    el.innerHTML=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${_html(product.name)}</div><div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div><div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_sponsorQuickColor?'active':''}" onclick="selectSponsorQuickColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div><div style="font-size:12px;font-weight:700;margin-bottom:7px">사이즈 <span style="font-weight:400;color:#a1a1aa">(누르면 출고 목록에 담겨요)</span></div><div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" onclick="addSponsorQuickVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>${_sponsorQuickLabel()} ${_sponsorQuickStock(v)}</small></button>`).join('')}</div>`;
+}
+function addSponsorQuickVariant(variantId){const source=_sponsorQuickSource(),item=_sponsorQuickCart.find(x=>x.variantId===variantId&&x.source===source);if(item)item.qty++;else _sponsorQuickCart.push({variantId,source,qty:1});renderSponsorQuickCart();}
+function changeSponsorQuickQty(variantId,source,delta){const item=_sponsorQuickCart.find(x=>x.variantId===variantId&&x.source===source);if(!item)return;item.qty+=delta;if(item.qty<=0)_sponsorQuickCart=_sponsorQuickCart.filter(x=>!(x.variantId===variantId&&x.source===source));renderSponsorQuickCart();}
+function removeSponsorQuickItem(variantId,source){_sponsorQuickCart=_sponsorQuickCart.filter(x=>!(x.variantId===variantId&&x.source===source));renderSponsorQuickCart();}
+function toggleSponsorQuickSource(variantId,source){
+    const item=_sponsorQuickCart.find(x=>x.variantId===variantId&&x.source===source);if(!item)return;
+    const next=source==='new'?'sample':'new',same=_sponsorQuickCart.find(x=>x.variantId===variantId&&x.source===next);
+    if(same){same.qty+=item.qty;_sponsorQuickCart=_sponsorQuickCart.filter(x=>x!==item);}else item.source=next;
+    renderSponsorQuickCart();
+}
+function clearSponsorQuickCart(){if(_sponsorQuickCart.length&&!confirm('출고 목록을 모두 비울까요?'))return;_sponsorQuickCart=[];renderSponsorQuickCart();}
+function renderSponsorQuickCart(){
+    const el=document.getElementById('sq-cart');_sponsorQuickCart=_sponsorQuickCart.filter(x=>_variants.some(v=>v.id===x.variantId));const total=_sponsorQuickCart.reduce((s,x)=>s+x.qty,0);document.getElementById('sq-total').textContent=`${total}개`;document.getElementById('sq-submit').disabled=!total;
+    if(!total){el.innerHTML='<div class="empty-state" style="padding:35px 5px"><i class="fas fa-box-open"></i>사이즈 버튼을 눌러 담으세요</div>';return;}
+    el.innerHTML=_sponsorQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id),isNew=item.source==='new',sourceLabel=isNew?'🆕 새제품 출고':'샘플제품 출고';return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeSponsorQuickItem('${item.variantId}','${item.source}')"><i class="fas fa-times"></i></button></div><button class="btn btn-sm w-100 mt-2" style="font-size:11px;font-weight:700;border:1px solid ${isNew?'#60a5fa':'#c4b5fd'};background:${isNew?'#eff6ff':'#faf5ff'};color:${isNew?'#1d4ed8':'#7c3aed'}" onclick="toggleSponsorQuickSource('${item.variantId}','${item.source}')">${sourceLabel} <span style="font-weight:400;opacity:.75">· 눌러서 변경</span></button><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',1)">+</button></div></div>`;}).join('');
+}
+async function submitSponsorQuick(){
+    const batchName=document.getElementById('batch-name').value.trim(),date=document.getElementById('batch-date').value;if(!batchName){showToast('묶음 이름을 입력하세요','danger');return;}if(!date){showToast('날짜를 선택하세요','danger');return;}if(!_sponsorQuickCart.length)return;
+    const total=_sponsorQuickCart.reduce((s,x)=>s+x.qty,0);if(!confirm(`"${batchName}" 협찬 ${total}개를 출고할까요?`))return;showLoading('협찬 묶음 출고 중...');
+    const batchId=uid(),rows=[];
+    try{for(const item of _sponsorQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const field=item.source==='new'?'stock':'sample_stock',type=item.source==='new'?'sponsor_out_new':'sponsor_out',next=(v[field]||0)-item.qty;const vr=await sb.from('variants').update({[field]:next}).eq('id',v.id);if(vr.error)throw vr.error;v[field]=next;rows.push({date,platform:'협찬',product_id:v.product_id,variant_id:v.id,quantity:item.qty,type,memo:batchName,batch_id:batchId,batch_name:batchName});}const or=await sb.from('orders').insert(rows);if(or.error)throw or.error;_sponsorQuickCart=[];document.getElementById('batch-name').value='';await refreshOrders();renderSponsorQuick();renderDashboard();renderSponsorHistory();showToast(`"${batchName}" 협찬 ${total}개가 출고됐어요.`);}catch(e){console.error(e);showToast('출고 중 오류가 발생했어요. 이력을 확인해주세요.','danger');await refreshProducts();await refreshOrders();renderSponsorQuick();}hideLoading();
 }
 
 function initSponsor() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('batch-date').value  = today;
-    document.getElementById('return-date').value = today;
-    if (document.getElementById('batch-items').children.length === 0) addBatchItem();
+    document.getElementById('batch-date').value  = document.getElementById('batch-date').value || today;
+    document.getElementById('return-date').value = document.getElementById('return-date').value || today;
+    initSponsorQuick();
     showSponsorSubtab('out');
     renderSponsorHistory();
 }
@@ -2719,7 +3194,10 @@ function addSaleItem() {
     div.innerHTML = `
         <div class="row g-2 align-items-end">
             <div class="col-5">
-                <label class="form-label" style="font-size:12px">상품</label>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label mb-0" style="font-size:12px">상품</label>
+                    <button type="button" class="btn btn-sm" style="font-size:11px;padding:2px 7px;border:1px solid #8b5cf6;color:#7c3aed;background:#faf5ff" onclick="openQuickPicker('sponsor',${id})"><i class="fas fa-hand-pointer me-1"></i>버튼 선택</button>
+                </div>
                 <div class="position-relative">
                     <i class="fas fa-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#a1a1aa;font-size:12px"></i>
                     <input type="text" class="form-control form-control-sm" id="mspi-${id}"
@@ -4216,7 +4694,7 @@ function _renderHistoryHtml(batchMapOrOrders, regularOrdersArg, showBulkCheck) {
     }
     if (Object.keys(batchMap).length === 0 && regularOrders.length === 0) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
     const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
-    const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas' };
+    const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline' };
     let html = '';
     const batchGroups = Object.values(batchMap).sort((a,b) => b.date.localeCompare(a.date));
     batchGroups.forEach(group => {
@@ -4423,7 +4901,7 @@ function renderSponsorHistory() {
 function _renderUnifiedHistory(items, showBulkCheck) {
     if (!items.length) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
     const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
-    const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas' };
+    const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline' };
     let html = '';
     let shownDate = null;
 
