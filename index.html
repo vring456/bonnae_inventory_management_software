@@ -624,11 +624,11 @@
 
                 <!-- 기본 설정 -->
                 <div class="row g-3 mb-3">
-                    <div class="col-4">
+                    <div class="col-md-3">
                         <label class="form-label">날짜</label>
                         <input type="date" class="form-control" id="img-date">
                     </div>
-                    <div class="col-4">
+                    <div class="col-md-3">
                         <label class="form-label">플랫폼</label>
                         <select class="form-select" id="img-platform">
                             <option value="카페24">카페24</option>
@@ -638,7 +638,14 @@
                             <option value="기타" selected>기타</option>
                         </select>
                     </div>
-                    <div class="col-4">
+                    <div class="col-md-3">
+                        <label class="form-label">반영 유형</label>
+                        <select class="form-select" id="img-type" onchange="updateExcelOrderTypeUI()">
+                            <option value="sale">판매 · 재고 차감</option>
+                            <option value="restock">입고 · 재고 추가</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">메모 <span class="text-muted" style="font-size:11px">(선택)</span></label>
                         <input type="text" class="form-control" id="img-memo" placeholder="거래처명 등">
                     </div>
@@ -660,8 +667,8 @@
                     </div>
                     <p class="text-muted small mb-3">매칭 상품과 수량을 확인한 뒤 반영하세요. 불필요한 항목은 삭제할 수 있어요.</p>
                     <div id="img-preview-table" style="overflow-x:auto"></div>
-                    <button class="btn btn-accent w-100 mt-3" onclick="submitImageOrders()">
-                        <i class="fas fa-check me-2"></i>확인 후 재고 반영하기
+                    <button class="btn btn-accent w-100 mt-3" id="img-submit-btn" onclick="submitImageOrders()">
+                        <i class="fas fa-check me-2"></i><span id="img-submit-label">확인 후 판매 재고 차감하기</span>
                     </button>
                 </div>
             </div>
@@ -2819,6 +2826,7 @@ function initOrders() {
     document.getElementById('oq-date').value = document.getElementById('oq-date').value || today;
     document.getElementById('sale-date').value = document.getElementById('sale-date').value || today;
     document.getElementById('img-date').value = document.getElementById('img-date').value || today;
+    updateExcelOrderTypeUI();
     const seasons = [...new Set(_products.map(p=>p.season).filter(Boolean))]
         .sort((a,b)=>_seasonRank(b)-_seasonRank(a) || a.localeCompare(b,'en',{sensitivity:'base',numeric:true}));
     if (_orderQuickSeason === null || (_orderQuickSeason && !seasons.includes(_orderQuickSeason))) _orderQuickSeason = seasons[0] || '';
@@ -3483,14 +3491,27 @@ function onImgProductChange(i) {
     varSel.innerHTML = variants.map(v => `<option value="${v.id}">${v.color} / ${v.size}</option>`).join('');
 }
 
+function updateExcelOrderTypeUI() {
+    const isRestock = document.getElementById('img-type')?.value === 'restock';
+    const btn = document.getElementById('img-submit-btn');
+    const label = document.getElementById('img-submit-label');
+    if (label) label.textContent = isRestock ? '확인 후 입고 재고 추가하기' : '확인 후 판매 재고 차감하기';
+    if (btn) {
+        btn.style.background = isRestock ? '#16a34a' : '';
+        btn.style.borderColor = isRestock ? '#16a34a' : '';
+    }
+}
+
 async function submitImageOrders() {
     const date     = document.getElementById('img-date').value;
     const platform = document.getElementById('img-platform').value;
+    const type     = document.getElementById('img-type').value;
     const memo     = document.getElementById('img-memo').value.trim();
     if (!date) { showToast('날짜를 선택하세요', 'danger'); return; }
 
     const batchId   = uid();
-    const batchName = memo ? `엑셀주문 — ${memo}` : `엑셀주문 ${date}`;
+    const actionLabel = type === 'restock' ? '입고' : '주문';
+    const batchName = memo ? `엑셀${actionLabel} — ${memo}` : `엑셀${actionLabel} ${date}`;
     const variantDelta = {};
     const orderInserts = [];
 
@@ -3501,13 +3522,13 @@ async function submitImageOrders() {
         const variantId = document.getElementById('ivar-' + i)?.value;
         const qty = parseInt(document.getElementById('iqty-' + i)?.value) || 0;
         if (!productId || !variantId || qty <= 0) return;
-        variantDelta[variantId] = (variantDelta[variantId] || 0) - qty;
-        orderInserts.push({ date, platform, product_id: productId, variant_id: variantId, quantity: qty, type: 'sale', batch_id: batchId, batch_name: batchName, memo: memo || null });
+        variantDelta[variantId] = (variantDelta[variantId] || 0) + (type === 'restock' ? qty : -qty);
+        orderInserts.push({ date, platform, product_id: productId, variant_id: variantId, quantity: qty, type, batch_id: batchId, batch_name: batchName, memo: memo || null });
     });
 
     if (orderInserts.length === 0) { showToast('반영할 항목이 없어요 (상품 매칭을 확인하세요)', 'danger'); return; }
 
-    showLoading(`${orderInserts.length}건 반영 중...`);
+    showLoading(`${orderInserts.length}건 ${type === 'restock' ? '입고' : '판매'} 반영 중...`);
     const updates = Object.entries(variantDelta).map(([variantId, delta]) => {
         const vari = _variants.find(v => v.id === variantId);
         if (!vari) return Promise.resolve();
@@ -3518,7 +3539,7 @@ async function submitImageOrders() {
     await Promise.all([...updates, sb.from('orders').insert(orderInserts)]);
     hideLoading();
 
-    showToast(`"${batchName}" ${orderInserts.length}건 반영 완료!`);
+    showToast(`"${batchName}" ${orderInserts.length}건 ${type === 'restock' ? '입고' : '판매'} 반영 완료!`);
     document.getElementById('img-preview-section').style.display = 'none';
     document.getElementById('img-memo').value = '';
     await refreshOrders();
