@@ -2866,6 +2866,10 @@ function renderOrderQuickOptions(){
 
 function addOrderQuickVariant(variantId){const item=_orderQuickCart.find(x=>x.variantId===variantId);if(item)item.qty++;else _orderQuickCart.push({variantId,qty:1});renderOrderQuickCart();}
 function changeOrderQuickQty(variantId,delta){const item=_orderQuickCart.find(x=>x.variantId===variantId);if(!item)return;item.qty+=delta;if(item.qty<=0)_orderQuickCart=_orderQuickCart.filter(x=>x.variantId!==variantId);renderOrderQuickCart();}
+function setOrderQuickQty(variantId,value){
+    const item=_orderQuickCart.find(x=>x.variantId===variantId);if(!item)return;
+    const qty=Math.max(1,parseInt(value,10)||1);item.qty=qty;renderOrderQuickCart();
+}
 function removeOrderQuickItem(variantId){_orderQuickCart=_orderQuickCart.filter(x=>x.variantId!==variantId);renderOrderQuickCart();}
 function clearOrderQuickCart(){if(_orderQuickCart.length&&!confirm('반영 목록을 모두 비울까요?'))return;_orderQuickCart=[];renderOrderQuickCart();}
 
@@ -2873,7 +2877,7 @@ function renderOrderQuickCart(){
     const el=document.getElementById('oq-cart');_orderQuickCart=_orderQuickCart.filter(x=>_variants.some(v=>v.id===x.variantId));
     const total=_orderQuickCart.reduce((s,x)=>s+x.qty,0);document.getElementById('oq-total').textContent=`${total}개`;document.getElementById('oq-submit').disabled=!total;
     if(!total){el.innerHTML='<div class="empty-state" style="padding:35px 5px"><i class="fas fa-list-check"></i>사이즈 버튼을 눌러 담으세요</div>';return;}
-    el.innerHTML=_orderQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id);return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeOrderQuickItem('${item.variantId}')"><i class="fas fa-times"></i></button></div><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',1)">+</button></div></div>`;}).join('');
+    el.innerHTML=_orderQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id);return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeOrderQuickItem('${item.variantId}')"><i class="fas fa-times"></i></button></div><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><span style="font-size:11px;color:#71717a;margin-right:2px">수량</span><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',-1)">−</button><input type="number" min="1" inputmode="numeric" value="${item.qty}" onchange="setOrderQuickQty('${item.variantId}',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" class="form-control form-control-sm" style="width:68px;text-align:center;font-weight:700"><button class="btn btn-outline-secondary btn-sm" onclick="changeOrderQuickQty('${item.variantId}',1)">+</button></div></div>`;}).join('');
 }
 
 async function submitOrderQuick(){
