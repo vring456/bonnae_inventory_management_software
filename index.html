@@ -398,7 +398,7 @@
                 <option value="true-soldout">🔴 진짜품절 (0개 + 웹숨김)</option>
                 <option value="uncounted">⚠️ 재고미입력 (0개 + 웹판매중)</option>
                 <option value="minus">🔴 마이너스 (0 미만)</option>
-                <option value="sample-zero">🟣 샘플재고 부족 (1개 미만)</option>
+                <option value="sample-zero">🏬 매장재고 부족 (1개 미만)</option>
                 <option value="web-soldout">🌐 웹숨김 상품 전체</option>
             </select>
         </div>
@@ -477,10 +477,11 @@
             <div class="card-box mb-3">
                 <div class="section-title">주문 기본 정보</div>
                 <div class="row g-3">
-                    <div class="col-md-3"><label class="form-label">플랫폼</label><select class="form-select" id="oq-platform"><option value="카페24">카페24</option><option value="크림">크림</option><option value="샘플라스">샘플라스</option><option value="오프라인">오프라인</option><option value="직접수정">직접수정</option><option value="기타">기타</option></select></div>
-                    <div class="col-md-3"><label class="form-label">유형</label><select class="form-select" id="oq-type" onchange="renderOrderQuick()"><option value="sale">판매 (차감)</option><option value="restock">입고 (추가)</option><option value="return">반품 (추가)</option><option value="sample_out">샘플 출고 (차감)</option><option value="sample_in">샘플 입고 (추가)</option><option value="b_sale">B급 판매 (차감)</option><option value="b_in">B급 입고 (추가)</option></select></div>
-                    <div class="col-md-3"><label class="form-label">날짜</label><input type="date" class="form-control" id="oq-date"></div>
-                    <div class="col-md-3"><label class="form-label">메모 <span class="text-muted" style="font-size:11px">(선택)</span></label><input type="text" class="form-control" id="oq-memo" placeholder="주문번호 등"></div>
+                    <div class="col-md"><label class="form-label">플랫폼</label><select class="form-select" id="oq-platform"><option value="카페24">카페24</option><option value="크림">크림</option><option value="샘플라스">샘플라스</option><option value="오프라인">오프라인</option><option value="직접수정">직접수정</option><option value="기타">기타</option></select></div>
+                    <div class="col-md"><label class="form-label">반영 유형</label><select class="form-select" id="oq-type" onchange="updateOrderQuickControls()"><option value="sale">판매 · 차감</option><option value="restock">입고 · 추가</option><option value="return">반품 · 추가</option><option value="b_sale">B급 판매 · 차감</option><option value="b_in">B급 입고 · 추가</option></select></div>
+                    <div class="col-md"><label class="form-label">재고 구분</label><select class="form-select" id="oq-stock-target" onchange="renderOrderQuick()"><option value="stock">판매재고</option><option value="sample_stock">🏬 매장재고</option></select></div>
+                    <div class="col-md"><label class="form-label">날짜</label><input type="date" class="form-control" id="oq-date"></div>
+                    <div class="col-md"><label class="form-label">메모 <span class="text-muted" style="font-size:11px">(선택)</span></label><input type="text" class="form-control" id="oq-memo" placeholder="주문번호 등"></div>
                 </div>
             </div>
             <div class="row g-3">
@@ -774,7 +775,7 @@
                     <option value="sale">판매</option>
                     <option value="restock">입고</option>
                     <option value="return">반품</option>
-                    <option value="sample">샘플 출입고</option>
+                    <option value="sample">매장 출입고</option>
                 </select>
             </div>
         </div>
@@ -929,9 +930,9 @@
                     </div>
                     <div class="col-md-4">
                         <div class="h-100 p-3 rounded-3" style="background:#f0fdf4">
-                            <div style="font-size:20px;margin-bottom:6px">🧪</div>
-                            <div style="font-weight:700;font-size:14px;color:#166534;margin-bottom:4px">샘플 재고</div>
-                            <div style="font-size:13px;color:#4b5563">판매 재고와 별도로 샘플 수량 관리 가능</div>
+                            <div style="font-size:20px;margin-bottom:6px">🏬</div>
+                            <div style="font-weight:700;font-size:14px;color:#166534;margin-bottom:4px">매장 재고</div>
+                            <div style="font-size:13px;color:#4b5563">판매 재고와 별도로 매장 수량 관리 가능</div>
                         </div>
                     </div>
                 </div>
@@ -988,7 +989,7 @@
                                 <div>
                                     <div style="font-weight:700;font-size:14px;color:#9a3412;margin-bottom:3px">수동 입력</div>
                                     <div style="font-size:13px;color:#4b5563">상품 · 옵션 · 수량 · 날짜 · 유형을 직접 선택해 1건씩 반영</div>
-                                    <div class="mt-1" style="font-size:11px;color:#9a3412">판매 / 입고 / 반품 / 샘플 출고·입고 / 취소</div>
+                                    <div class="mt-1" style="font-size:11px;color:#9a3412">판매 / 입고 / 반품 / 매장 출고·입고 / 취소</div>
                                 </div>
                             </div>
                         </div>
@@ -1061,7 +1062,7 @@
                         <div class="h-100 p-3 rounded-3" style="background:#f9fafb;border:1px solid #e5e7eb">
                             <div style="font-size:20px;margin-bottom:6px">📜</div>
                             <div style="font-weight:700;font-size:14px;color:#111827;margin-bottom:4px">재고 이력</div>
-                            <div style="font-size:13px;color:#4b5563">판매 · 입고 · 반품 · 샘플 · 협찬 전체 이력. 묶음은 하나로 접혀서 표시. 30건씩 페이지</div>
+                            <div style="font-size:13px;color:#4b5563">판매 · 입고 · 반품 · 매장 · 협찬 전체 이력. 묶음은 하나로 접혀서 표시. 30건씩 페이지</div>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -1176,6 +1177,7 @@
                     <div class="col-md-4"><label class="form-label">시즌</label><input type="text" class="form-control" id="new-product-season" placeholder="예: 26 HS" oninput="autoFillSku()"></div>
                     <div class="col-md-4"><label class="form-label">SKU 코드 <span style="font-size:11px;color:#a1a1aa;font-weight:400">자동생성</span></label><input type="text" class="form-control" id="new-product-sku" placeholder="상품명 입력 시 자동 생성" oninput="_skuAutoMode=false"></div>
                 </div>
+                <div class="mb-3"><label class="form-label">비고 / 메모 <span class="text-muted" style="font-size:11px">(선택)</span></label><textarea class="form-control" id="new-product-note" rows="2" placeholder="입고 예정, 불량 주의사항, 판매 메모 등을 입력하세요"></textarea></div>
                 <hr>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="section-title mb-0">색상 / 사이즈별 재고</div>
@@ -1206,6 +1208,7 @@
                     <div class="col-md-4"><label class="form-label">시즌</label><input type="text" class="form-control" id="edit-product-season"></div>
                     <div class="col-md-4"><label class="form-label">SKU 코드</label><input type="text" class="form-control" id="edit-product-sku"></div>
                 </div>
+                <div class="mb-3"><label class="form-label">비고 / 메모 <span class="text-muted" style="font-size:11px">(선택)</span></label><textarea class="form-control" id="edit-product-note" rows="3" placeholder="입고 예정, 불량 주의사항, 판매 메모 등을 입력하세요"></textarea></div>
                 <hr>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="section-title mb-0">색상 / 사이즈 옵션</div>
@@ -1216,7 +1219,7 @@
                     <span style="flex:2">색상</span>
                     <span style="flex:1">사이즈</span>
                     <span style="flex:1">판매재고</span>
-                    <span style="flex:1">샘플재고</span>
+                    <span style="flex:1">매장재고</span>
                     <span style="flex:1">B급재고</span>
                     <span style="flex:0 0 50px"></span>
                 </div>
@@ -1425,6 +1428,7 @@ async function initApp(url, key) {
 let _products = [];
 let _variants  = [];
 let _orders    = [];
+let _productNotes = {};
 let _webSoldOutIds       = new Set(); // product IDs — 웹에서 아예 안 보이는 상품
 let _webActiveIds        = new Set(); // product IDs — 웹에서 보이는 상품
 let _webSoldoutVariantIds = new Set(); // variant IDs — 특정 사이즈만 품절 ([품절] 표시)
@@ -1433,16 +1437,23 @@ let _webCheckedAt        = null;
 async function loadAllData() {
     showLoading('데이터 불러오는 중...');
     try {
-        const [p, v, o] = await Promise.all([
+        const [p, v, o, n] = await Promise.all([
             sb.from('products').select('*').order('created_at'),
             sb.from('variants').select('*').order('created_at'),
-            sb.from('orders').select('*').order('created_at', { ascending: false })
+            sb.from('orders').select('*').order('created_at', { ascending: false }),
+            sb.from('app_settings').select('value').eq('key', 'product_notes').maybeSingle()
         ]);
         _products = p.data || [];
         _variants  = v.data || [];
         _orders    = o.data || [];
+        _productNotes = (n.data && n.data.value && typeof n.data.value === 'object') ? n.data.value : {};
     } catch(e) { console.error(e); }
     hideLoading();
+}
+
+async function saveProductNotes() {
+    const { error } = await sb.from('app_settings').upsert({ key:'product_notes', value:_productNotes }, { onConflict:'key' });
+    if (error) throw error;
 }
 
 // Realtime subscriptions
@@ -1589,9 +1600,9 @@ function renderStoreProducts() {
     const el = document.getElementById('store-products');
     if (!products.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:35px 10px"><i class="fas fa-search"></i>해당 상품이 없어요</div>'; return; }
     el.innerHTML = products.map(p => {
-        const stock = getVariantsByProduct(p.id).reduce((s,v)=>s+Math.max(0,v.stock||0),0);
+        const stock = getVariantsByProduct(p.id).reduce((s,v)=>s+Math.max(0,v.sample_stock||0),0);
         return `<button class="store-product-btn ${p.id===_storeProductId?'active':''}" onclick="selectStoreProduct('${p.id}')">
-            <span>${_html(p.name)}</span><small>재고 ${stock}</small>
+            <span>${_html(p.name)}</span><small>매장재고 ${stock}</small>
         </button>`;
     }).join('');
 }
@@ -1621,15 +1632,15 @@ function renderStoreOptions() {
         <div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div>
         <div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_storeColor?'active':''}" onclick="selectStoreColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div>
         <div style="font-size:12px;font-weight:700;margin-bottom:7px">사이즈 <span style="font-weight:400;color:#a1a1aa">(누르면 바로 담겨요)</span></div>
-        <div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" ${v.stock<=0?'disabled':''} onclick="addStoreVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>재고 ${v.stock||0}</small></button>`).join('') || '<span style="color:#a1a1aa">등록된 옵션이 없어요</span>'}</div>`;
+        <div class="store-choice-row">${chosen.map(v=>`<button class="store-choice-btn" ${(v.sample_stock||0)<=0?'disabled':''} onclick="addStoreVariant('${v.id}')"><b>${_html(v.size||'FREE')}</b><small>매장재고 ${v.sample_stock||0}</small></button>`).join('') || '<span style="color:#a1a1aa">등록된 옵션이 없어요</span>'}</div>`;
 }
 
 function addStoreVariant(variantId) {
     const variant = _variants.find(v => v.id === variantId);
-    if (!variant || variant.stock <= 0) { showToast('판매 가능한 재고가 없어요.', 'danger'); return; }
+    if (!variant || (variant.sample_stock||0) <= 0) { showToast('판매 가능한 매장재고가 없어요.', 'danger'); return; }
     const item = _storeCart.find(x => x.variantId === variantId);
     const nextQty = (item?.qty || 0) + 1;
-    if (nextQty > variant.stock) { showToast(`현재 재고는 ${variant.stock}개예요.`, 'danger'); return; }
+    if (nextQty > (variant.sample_stock||0)) { showToast(`현재 매장재고는 ${variant.sample_stock||0}개예요.`, 'danger'); return; }
     if (item) item.qty = nextQty; else _storeCart.push({ variantId, qty:1 });
     renderStoreCart();
 }
@@ -1640,7 +1651,7 @@ function changeStoreCartQty(variantId, delta) {
     if (!item || !variant) return;
     const next = item.qty + delta;
     if (next <= 0) _storeCart = _storeCart.filter(x => x.variantId !== variantId);
-    else if (next > variant.stock) showToast(`현재 재고는 ${variant.stock}개예요.`, 'danger');
+    else if (next > (variant.sample_stock||0)) showToast(`현재 매장재고는 ${variant.sample_stock||0}개예요.`, 'danger');
     else item.qty = next;
     renderStoreCart();
 }
@@ -1679,7 +1690,7 @@ async function submitStoreSale() {
     if (!_storeCart.length) return;
     for (const item of _storeCart) {
         const v = _variants.find(x=>x.id===item.variantId);
-        if (!v || item.qty > v.stock) { showToast('재고가 바뀐 상품이 있어요. 수량을 다시 확인해주세요.', 'danger'); await refreshVariants(); renderStore(); return; }
+        if (!v || item.qty > (v.sample_stock||0)) { showToast('매장재고가 바뀐 상품이 있어요. 수량을 다시 확인해주세요.', 'danger'); await refreshVariants(); renderStore(); return; }
     }
     const total = _storeCart.reduce((s,x)=>s+x.qty,0);
     if (!confirm(`오프라인 판매 ${total}개를 완료할까요?\n결제: ${_storePayment}`)) return;
@@ -1691,10 +1702,10 @@ async function submitStoreSale() {
     try {
         for (const item of sales) {
             const v = _variants.find(x=>x.id===item.variantId);
-            const result = await sb.from('variants').update({stock:v.stock-item.qty}).eq('id',v.id);
+            const result = await sb.from('variants').update({sample_stock:(v.sample_stock||0)-item.qty}).eq('id',v.id);
             if (result.error) throw result.error;
-            v.stock -= item.qty;
-            const orderResult = await sb.from('orders').insert({ date, platform:'오프라인', product_id:v.product_id, variant_id:v.id, quantity:item.qty, type:'sale', memo:`오프라인 ${_storePayment} 결제`, batch_id:batchId, batch_name:batchName });
+            v.sample_stock = (v.sample_stock||0)-item.qty;
+            const orderResult = await sb.from('orders').insert({ date, platform:'오프라인', product_id:v.product_id, variant_id:v.id, quantity:item.qty, type:'store_sale', memo:`오프라인 ${_storePayment} 결제`, batch_id:batchId, batch_name:batchName });
             if (orderResult.error) throw orderResult.error;
         }
         _lastStoreBatchId = batchId;
@@ -1762,7 +1773,7 @@ function renderQuickPickerProducts() {
     el.innerHTML = products.map(p=>{
         const variants = getVariantsByProduct(p.id);
         const available = variants.reduce((s,v)=>s+Math.max(0,_quickPickerTarget==='sponsor'?(v.sample_stock||0):_quickPickerStock(v)),0);
-        const label = _quickPickerTarget==='sponsor' ? '샘플재고' : '재고';
+        const label = _quickPickerTarget==='sponsor' ? '매장재고' : '재고';
         return `<button class="store-product-btn ${p.id===_quickPickerProductId?'active':''}" onclick="selectQuickPickerProduct('${p.id}')"><span>${_html(p.name)}</span><small>${label} ${available}</small></button>`;
     }).join('');
 }
@@ -1793,7 +1804,7 @@ function renderQuickPickerOptions() {
     const colors = [...new Set(variants.map(v=>v.color||'기본'))];
     if (!colors.includes(_quickPickerColor)) _quickPickerColor=colors[0]||'';
     const chosen = variants.filter(v=>(v.color||'기본')===_quickPickerColor);
-    const label = _quickPickerTarget==='sponsor' ? '샘플재고' : (_stockField(document.getElementById('manual-type')?.value||'sale')==='sample_stock'?'샘플재고':_stockField(document.getElementById('manual-type')?.value||'sale')==='b_stock'?'B급재고':'재고');
+    const label = _quickPickerTarget==='sponsor' ? '매장재고' : (_stockField(document.getElementById('manual-type')?.value||'sale')==='sample_stock'?'매장재고':_stockField(document.getElementById('manual-type')?.value||'sale')==='b_stock'?'B급재고':'재고');
     el.innerHTML = `<div style="font-size:18px;font-weight:800;margin-bottom:16px">${_html(product.name)}</div>
         <div style="font-size:12px;font-weight:700;margin-bottom:7px">컬러</div>
         <div class="store-choice-row" style="margin-bottom:18px">${colors.map(c=>`<button class="store-choice-btn ${c===_quickPickerColor?'active':''}" onclick="selectQuickPickerColor('${encodeURIComponent(c)}')">${_html(c)}</button>`).join('')}</div>
@@ -1828,7 +1839,7 @@ function renderDashboard() {
     const thisY = now.getFullYear(), thisM = now.getMonth();
     const lastY = thisM === 0 ? thisY - 1 : thisY, lastM = thisM === 0 ? 11 : thisM - 1;
 
-    const isSale = o => o.type === 'sale';
+    const isSale = o => o.type === 'sale' || o.type === 'store_sale';
     const inMonth = (o, y, m) => { const d = new Date(o.date); return d.getFullYear()===y && d.getMonth()===m; };
 
     const thisSales   = _orders.filter(o => isSale(o) && inMonth(o, thisY, thisM));
@@ -1885,7 +1896,7 @@ function renderDashboard() {
 
     // ── KPI 카드 ──
     const pClass = {'카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline'};
-    const tl = { sale:'판매', restock:'입고', return:'반품', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고', cancel:'취소' };
+    const tl = { sale:'판매', store_sale:'매장판매', restock:'입고', return:'반품', sample_out:'매장출고', sample_in:'매장입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고', cancel:'취소' };
 
     document.getElementById('dash-kpi').innerHTML = `
         <div class="col-6 col-md-3">
@@ -1898,8 +1909,8 @@ function renderDashboard() {
         <div class="col-6 col-md-3">
             <div class="stat-card" style="border-left:3px solid #0ea5e9">
                 <div class="stat-label">전체 재고</div>
-                <div class="stat-value">${_variants.reduce((s,v)=>s+(v.stock||0),0).toLocaleString()}<span style="font-size:14px;color:#a1a1aa">개</span></div>
-                <div style="font-size:12px;margin-top:4px;color:#71717a">상품 ${_products.length}종</div>
+                <div class="stat-value">${_variants.reduce((s,v)=>s+(v.stock||0)+(v.sample_stock||0),0).toLocaleString()}<span style="font-size:14px;color:#a1a1aa">개</span></div>
+                <div style="font-size:12px;margin-top:4px;color:#71717a">판매 ${_variants.reduce((s,v)=>s+(v.stock||0),0).toLocaleString()} · 매장 ${_variants.reduce((s,v)=>s+(v.sample_stock||0),0).toLocaleString()}</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
@@ -2025,7 +2036,7 @@ function renderProducts() {
     const el = document.getElementById('products-table-container');
     let prods = _products;
     if (seasonF) prods = prods.filter(p => p.season === seasonF);
-    if (searchQ) prods = prods.filter(p => p.name.toLowerCase().includes(searchQ));
+    if (searchQ) prods = prods.filter(p => p.name.toLowerCase().includes(searchQ) || String(_productNotes[p.id]||'').toLowerCase().includes(searchQ));
     if (statusF === 'web-soldout') prods = prods.filter(p =>
         _webSoldOutIds.has(p.id) ||
         _variants.some(v => v.product_id === p.id && _webSoldoutVariantIds.has(v.id))
@@ -2041,7 +2052,7 @@ function renderProducts() {
         return;
     }
     let html = `<div class="table-responsive"><table class="table">
-        <thead><tr><th>시즌</th><th>상품명</th><th>컬러</th><th>사이즈</th><th>판매재고</th><th>샘플재고</th><th>B급재고</th><th>상태</th><th></th></tr></thead><tbody>`;
+        <thead><tr><th>시즌</th><th>상품명</th><th>비고 / 메모</th><th>컬러</th><th>사이즈</th><th>판매재고</th><th>매장재고</th><th>B급재고</th><th>상태</th><th></th></tr></thead><tbody>`;
 
     prods.forEach(prod => {
         let pvariants = _variants.filter(v => v.product_id === prod.id);
@@ -2132,6 +2143,7 @@ function renderProducts() {
             html += `<tr style="${bgRow}">
                 <td style="color:#71717a;font-size:12px">${i===0?(prod.season||'—'):''}</td>
                 <td style="font-weight:600">${i===0?`${prod.name} <span style="font-size:11px;color:#a1a1aa">${prod.sku||''}</span>${webBadge}`:''}</td>
+                <td style="max-width:220px;font-size:12px;color:#52525b;white-space:normal">${i===0?(_productNotes[prod.id]?`<span title="${_html(_productNotes[prod.id])}" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_html(_productNotes[prod.id])}</span>`:'<span style="color:#d4d4d8">—</span>'):''}</td>
                 <td>${v.color}</td><td>${v.size}</td>
                 <td class="${cls}">${v.stock}개</td>
                 <td style="color:#8b5cf6;font-weight:600">${sampleSt}개</td>
@@ -2489,6 +2501,7 @@ async function saveProduct() {
     if (!name) { showToast('상품명을 입력하세요', 'danger'); return; }
     const season = document.getElementById('new-product-season').value.trim();
     const sku    = document.getElementById('new-product-sku').value.trim();
+    const note   = document.getElementById('new-product-note').value.trim();
 
     const variantData = [];
     document.querySelectorAll('#variant-rows .variant-row').forEach(row => {
@@ -2505,13 +2518,18 @@ async function saveProduct() {
     const { error: ve } = await sb.from('variants').insert(
         variantData.map(v => ({ ...v, product_id: prod.id }))
     );
+    if (ve) { hideLoading(); showToast('옵션 저장 실패: ' + ve.message, 'danger'); return; }
+
+    if (note) _productNotes[prod.id] = note;
+    try { await saveProductNotes(); }
+    catch(e) { console.error(e); hideLoading(); showToast('상품은 추가됐지만 메모 저장에 실패했어요.', 'danger'); return; }
     hideLoading();
-    if (ve) { showToast('옵션 저장 실패: ' + ve.message, 'danger'); return; }
 
     bootstrap.Modal.getInstance(document.getElementById('addProductModal')).hide();
     document.getElementById('new-product-name').value   = '';
     document.getElementById('new-product-season').value = '';
     document.getElementById('new-product-sku').value    = '';
+    document.getElementById('new-product-note').value   = '';
     document.getElementById('variant-rows').innerHTML   = '';
 
     await refreshProducts();
@@ -2538,6 +2556,7 @@ function openEditProduct(productId) {
     document.getElementById('edit-product-name').value   = prod.name   || '';
     document.getElementById('edit-product-season').value = prod.season || '';
     document.getElementById('edit-product-sku').value    = prod.sku    || '';
+    document.getElementById('edit-product-note').value   = _productNotes[prod.id] || '';
 
     const variants = _variants.filter(v => v.product_id === productId).sort((a, b) => {
         const cc = a.color.localeCompare(b.color);
@@ -2553,7 +2572,7 @@ function openEditProduct(productId) {
             <input type="number" class="form-control form-control-sm" id="evst-${v.id}"
                 value="${v.stock}" min="0" style="flex:1;font-size:13px" placeholder="판매재고">
             <input type="number" class="form-control form-control-sm" id="evss-${v.id}"
-                value="${v.sample_stock||0}" min="0" style="flex:1;font-size:13px;border-color:#8b5cf6" placeholder="샘플재고">
+                value="${v.sample_stock||0}" min="0" style="flex:1;font-size:13px;border-color:#8b5cf6" placeholder="매장재고">
             <input type="number" class="form-control form-control-sm" id="evsb-${v.id}"
                 value="${v.b_stock||0}" min="0" style="flex:1;font-size:13px;border-color:#d97706" placeholder="B급재고">
             <button class="btn btn-outline-danger btn-sm" style="font-size:11px;white-space:nowrap;flex:0 0 auto"
@@ -2591,7 +2610,7 @@ function addEditVariantRow() {
         <input type="text" class="form-control" placeholder="색상" style="flex:2">
         <input type="text" class="form-control" placeholder="사이즈" style="flex:1">
         <input type="number" class="form-control" placeholder="판매재고" min="0" value="0" style="flex:1">
-        <input type="number" class="form-control" placeholder="샘플재고" min="0" value="0" style="flex:1">
+        <input type="number" class="form-control" placeholder="매장재고" min="0" value="0" style="flex:1">
         <input type="number" class="form-control" placeholder="B급재고" min="0" value="0" style="flex:1;border-color:#d97706">
         <button class="btn btn-outline-danger btn-sm" onclick="this.closest('.variant-row').remove()">
             <i class="fas fa-times"></i></button>`;
@@ -2603,12 +2622,17 @@ async function saveEditedProduct() {
     if (!name) { showToast('상품명을 입력하세요', 'danger'); return; }
     const season = document.getElementById('edit-product-season').value.trim();
     const sku    = document.getElementById('edit-product-sku').value.trim();
+    const note   = document.getElementById('edit-product-note').value.trim();
 
     showLoading('저장 중...');
 
     // 상품 정보 업데이트
     const { error: pe } = await sb.from('products').update({ name, season, sku }).eq('id', _editProductId);
     if (pe) { hideLoading(); showToast('저장 실패: ' + pe.message, 'danger'); return; }
+    if (note) _productNotes[_editProductId] = note;
+    else delete _productNotes[_editProductId];
+    try { await saveProductNotes(); }
+    catch(e) { hideLoading(); showToast('메모 저장 실패: ' + (e.message||''), 'danger'); return; }
 
     // 기존 옵션 컬러 수정
     const colorInputs = document.querySelectorAll('[id^="evc-"]');
@@ -2641,7 +2665,7 @@ async function saveEditedProduct() {
         }
     }
 
-    // 기존 옵션 샘플재고 수정
+    // 기존 옵션 매장재고 수정
     for (const inp of document.querySelectorAll('[id^="evss-"]')) {
         const variantId = inp.id.replace('evss-', '');
         if (_editVariantsToDelete.has(variantId)) continue;
@@ -2697,6 +2721,8 @@ async function deleteProductFromModal() {
     const { error } = await sb.from('products').delete().eq('id', _editProductId);
     hideLoading();
     if (error) { showToast('삭제 실패: ' + error.message, 'danger'); return; }
+    delete _productNotes[_editProductId];
+    try { await saveProductNotes(); } catch(e) { console.error(e); }
     await refreshProducts();
     renderProducts();
     renderDashboard();
@@ -2764,7 +2790,7 @@ let _editField = 'stock'; // 'stock' or 'sample_stock'
 function openEditStock(variantId, pname, color, size, stock, field = 'stock') {
     _editVariantId = variantId;
     _editField = field;
-    const fieldLabel = field === 'sample_stock' ? '샘플재고' : '판매재고';
+    const fieldLabel = field === 'sample_stock' ? '매장재고' : '판매재고';
     document.getElementById('edit-stock-label').textContent = `${pname} — ${color} / ${size}  [${fieldLabel}]`;
     document.getElementById('edit-stock-qty').value = stock;
     new bootstrap.Modal(document.getElementById('editStockModal')).show();
@@ -2792,7 +2818,7 @@ async function saveEditedStock() {
             memo: '재고 직접 수정'
         });
     } else if (!error && diff !== 0 && _editField === 'sample_stock') {
-        // 샘플재고 직접수정도 이력 남김
+        // 매장재고 직접수정도 이력 남김
         await sb.from('orders').insert({
             date: new Date().toISOString().split('T')[0],
             platform: '직접수정',
@@ -2800,7 +2826,7 @@ async function saveEditedStock() {
             variant_id: variant.id,
             quantity: Math.abs(diff),
             type: diff >= 0 ? 'sample_in' : 'sample_out',
-            memo: '샘플재고 직접 수정'
+            memo: '매장재고 직접 수정'
         });
     }
     hideLoading();
@@ -2834,12 +2860,22 @@ function initOrders() {
     seasonEl.innerHTML = '<option value="">전체 시즌</option>' + seasons.map(s=>`<option value="${_html(s)}">${_html(s)}</option>`).join('');
     seasonEl.value = _orderQuickSeason;
     document.getElementById('oq-search').value = _orderQuickSearch;
-    renderOrderQuick();
+    updateOrderQuickControls();
 }
 
-function _orderQuickField() { return _stockField(document.getElementById('oq-type')?.value || 'sale'); }
+function updateOrderQuickControls() {
+    const type=document.getElementById('oq-type')?.value||'sale',target=document.getElementById('oq-stock-target');
+    const isB=type==='b_sale'||type==='b_in';
+    if(target){target.disabled=isB;target.title=isB?'B급 유형은 B급재고에 반영돼요':'';}
+    renderOrderQuick();
+}
+function _orderQuickField() {
+    const type=document.getElementById('oq-type')?.value||'sale';
+    if(type==='b_sale'||type==='b_in') return 'b_stock';
+    return document.getElementById('oq-stock-target')?.value||'stock';
+}
 function _orderQuickStock(v) { return v?.[_orderQuickField()] || 0; }
-function _orderQuickStockLabel() { const f=_orderQuickField(); return f==='sample_stock'?'샘플재고':f==='b_stock'?'B급재고':'재고'; }
+function _orderQuickStockLabel() { const f=_orderQuickField(); return f==='sample_stock'?'매장재고':f==='b_stock'?'B급재고':'재고'; }
 
 function renderOrderQuick() { renderOrderQuickProducts(); renderOrderQuickOptions(); renderOrderQuickCart(); }
 
@@ -2884,12 +2920,15 @@ async function submitOrderQuick(){
     if(!_orderQuickCart.length)return;
     const platform=document.getElementById('oq-platform').value,type=document.getElementById('oq-type').value,date=document.getElementById('oq-date').value,memo=document.getElementById('oq-memo').value.trim();
     if(!date){showToast('날짜를 선택하세요','danger');return;}
-    const total=_orderQuickCart.reduce((s,x)=>s+x.qty,0), isBatch=_orderQuickCart.length>1, batchId=isBatch?uid():null, batchName=isBatch?`${platform} ${date} (${_orderQuickCart.length}품목 · ${total}개)`:null;
-    if(!confirm(`${platform} ${isBatch?'묶음 ':''}${total}개를 재고에 반영할까요?`))return;
+    const field=_orderQuickField(),stockLabel=_orderQuickStockLabel();
+    const total=_orderQuickCart.reduce((s,x)=>s+x.qty,0), isBatch=_orderQuickCart.length>1, batchId=isBatch?uid():null, batchName=isBatch?`${platform} ${date} · ${stockLabel} (${_orderQuickCart.length}품목 · ${total}개)`:null;
+    if(!confirm(`${platform} ${isBatch?'묶음 ':''}${total}개를 ${stockLabel}에 반영할까요?`))return;
     showLoading('재고 반영 중...');
     try{
-        const field=_stockField(type), rows=[];
-        for(const item of _orderQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const next=(v[field]||0)+(_isDeduct(type)?-item.qty:item.qty);const vr=await sb.from('variants').update({[field]:next}).eq('id',v.id);if(vr.error)throw vr.error;v[field]=next;rows.push({date,platform,product_id:v.product_id,variant_id:v.id,quantity:item.qty,type,memo,...(isBatch?{batch_id:batchId,batch_name:batchName}:{})});}
+        const deduct=type==='sale'||type==='b_sale';
+        const orderType=field==='sample_stock'?(deduct?'store_sale':'sample_in'):type;
+        const rows=[];
+        for(const item of _orderQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const next=(v[field]||0)+(deduct?-item.qty:item.qty);const vr=await sb.from('variants').update({[field]:next}).eq('id',v.id);if(vr.error)throw vr.error;v[field]=next;rows.push({date,platform,product_id:v.product_id,variant_id:v.id,quantity:item.qty,type:orderType,memo,...(isBatch?{batch_id:batchId,batch_name:batchName}:{})});}
         const or=await sb.from('orders').insert(rows);if(or.error)throw or.error;
         _orderQuickCart=[];document.getElementById('oq-memo').value='';await refreshOrders();renderOrderQuick();renderDashboard();showToast(`${isBatch?'묶음 ':''}${total}개가 반영됐어요.`);
     }catch(e){console.error(e);showToast('반영 중 오류가 발생했어요. 이력을 확인해주세요.','danger');await refreshProducts();await refreshOrders();renderOrderQuick();}
@@ -2910,10 +2949,10 @@ function initSponsorQuick(){
 }
 function _sponsorQuickSource(){return document.getElementById('sq-source')?.value||'sample';}
 function _sponsorQuickStock(v,source=_sponsorQuickSource()){return source==='new'?(v.stock||0):(v.sample_stock||0);}
-function _sponsorQuickLabel(source=_sponsorQuickSource()){return source==='new'?'새제품 재고':'샘플 재고';}
+function _sponsorQuickLabel(source=_sponsorQuickSource()){return source==='new'?'새제품 재고':'매장 재고';}
 function updateSponsorSourceUI(){
     const isNew=_sponsorQuickSource()==='new',help=document.getElementById('sq-source-help'),select=document.getElementById('sq-source');
-    if(help){help.textContent=isNew?'🆕 판매재고에서 차감':'샘플재고에서 차감';help.style.color=isNew?'#2563eb':'#7c3aed';}
+    if(help){help.textContent=isNew?'🆕 판매재고에서 차감':'매장재고에서 차감';help.style.color=isNew?'#2563eb':'#7c3aed';}
     if(select){select.style.borderColor=isNew?'#60a5fa':'#c4b5fd';select.style.background=isNew?'#eff6ff':'#faf5ff';}
     renderSponsorQuick();
 }
@@ -2943,7 +2982,7 @@ function clearSponsorQuickCart(){if(_sponsorQuickCart.length&&!confirm('출고 �
 function renderSponsorQuickCart(){
     const el=document.getElementById('sq-cart');_sponsorQuickCart=_sponsorQuickCart.filter(x=>_variants.some(v=>v.id===x.variantId));const total=_sponsorQuickCart.reduce((s,x)=>s+x.qty,0);document.getElementById('sq-total').textContent=`${total}개`;document.getElementById('sq-submit').disabled=!total;
     if(!total){el.innerHTML='<div class="empty-state" style="padding:35px 5px"><i class="fas fa-box-open"></i>사이즈 버튼을 눌러 담으세요</div>';return;}
-    el.innerHTML=_sponsorQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id),isNew=item.source==='new',sourceLabel=isNew?'🆕 새제품 출고':'샘플제품 출고';return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeSponsorQuickItem('${item.variantId}','${item.source}')"><i class="fas fa-times"></i></button></div><button class="btn btn-sm w-100 mt-2" style="font-size:11px;font-weight:700;border:1px solid ${isNew?'#60a5fa':'#c4b5fd'};background:${isNew?'#eff6ff':'#faf5ff'};color:${isNew?'#1d4ed8':'#7c3aed'}" onclick="toggleSponsorQuickSource('${item.variantId}','${item.source}')">${sourceLabel} <span style="font-weight:400;opacity:.75">· 눌러서 변경</span></button><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',1)">+</button></div></div>`;}).join('');
+    el.innerHTML=_sponsorQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id),isNew=item.source==='new',sourceLabel=isNew?'🆕 새제품 출고':'매장제품 출고';return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeSponsorQuickItem('${item.variantId}','${item.source}')"><i class="fas fa-times"></i></button></div><button class="btn btn-sm w-100 mt-2" style="font-size:11px;font-weight:700;border:1px solid ${isNew?'#60a5fa':'#c4b5fd'};background:${isNew?'#eff6ff':'#faf5ff'};color:${isNew?'#1d4ed8':'#7c3aed'}" onclick="toggleSponsorQuickSource('${item.variantId}','${item.source}')">${sourceLabel} <span style="font-weight:400;opacity:.75">· 눌러서 변경</span></button><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',1)">+</button></div></div>`;}).join('');
 }
 async function submitSponsorQuick(){
     const batchName=document.getElementById('batch-name').value.trim(),date=document.getElementById('batch-date').value;if(!batchName){showToast('묶음 이름을 입력하세요','danger');return;}if(!date){showToast('날짜를 선택하세요','danger');return;}if(!_sponsorQuickCart.length)return;
@@ -3093,7 +3132,7 @@ function onBatchReturnSelect() {
                 <div style="font-size:12px;color:#71717a">${vari?vari.color+' / '+vari.size:'—'}</div>
             </div>
             <div style="font-size:12px;color:#8b5cf6;white-space:nowrap">출고 ${o.quantity}개</div>
-            <div style="font-size:11px;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:6px;white-space:nowrap">샘플재고 ${sampleStock}개</div>
+            <div style="font-size:11px;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:6px;white-space:nowrap">매장재고 ${sampleStock}개</div>
             <div class="d-flex align-items-center gap-1" id="rqty-wrap-${o.id}">
                 <span style="font-size:12px;color:#52525b">회수</span>
                 <input type="number" class="form-control form-control-sm"
@@ -3137,7 +3176,7 @@ async function submitBatchReturn() {
     const returnBatchId   = uid();
     const returnBatchName = `${batchName} 회수${memo ? ' — ' + memo : ''}`;
 
-    const variantSampleDelta = {}; // 샘플재고 복구 (일반 협찬)
+    const variantSampleDelta = {}; // 매장재고 복구 (일반 협찬)
     const variantStockDelta  = {}; // 판매재고 복구 (새상품 협찬)
     const orderInserts = [];
 
@@ -3663,7 +3702,7 @@ function selectBatchProduct(rowId, productId, productName) {
             .forEach(v => {
                 const o = document.createElement('option');
                 o.value = v.id;
-                o.textContent = `${v.color} / ${v.size}  (샘플재고: ${v.sample_stock||0}개)`;
+                o.textContent = `${v.color} / ${v.size}  (매장재고: ${v.sample_stock||0}개)`;
                 varSel.appendChild(o);
             });
     }
@@ -3686,7 +3725,7 @@ async function submitBatchOrder() {
     const variantDelta = {};
     const orderInserts = [];
 
-    const variantSampleDelta = {}; // 샘플재고 차감
+    const variantSampleDelta = {}; // 매장재고 차감
     const variantStockDelta  = {}; // 판매재고 차감 (새상품)
 
     document.querySelectorAll('#batch-items > div').forEach(row => {
@@ -3738,7 +3777,7 @@ async function cancelBatch(batchId) {
     if (batchOrders.length === 0) return;
     const batchName = batchOrders[0].batch_name || batchId;
     const isSponsor = batchOrders.some(o => _isSampleType(o.type));
-    const stockLabel = isSponsor ? '샘플 재고' : '판매 재고';
+    const stockLabel = isSponsor ? '매장 재고' : '판매 재고';
     if (!confirm(`"${batchName}" 묶음 ${batchOrders.length}건을 취소할까요?\n${stockLabel}가 원상복구돼요.`)) return;
 
     showLoading('묶음 취소 처리 중...');
@@ -3860,7 +3899,7 @@ function updateBatchAddVariants() {
     const productId = document.getElementById('batch-add-product').value;
     const sel = document.getElementById('batch-add-variant');
     const field = _batchAddCtx ? _stockField(_batchAddCtx.type) : 'stock';
-    const label = field === 'sample_stock' ? '샘플' : field === 'b_stock' ? 'B급' : '판매';
+    const label = field === 'sample_stock' ? '매장' : field === 'b_stock' ? 'B급' : '판매';
     const vars = _variants.filter(v => v.product_id === productId).slice().sort((a,b) =>
         a.color.localeCompare(b.color, 'en', {sensitivity:'base'}) ||
         String(a.size).localeCompare(String(b.size), 'en', {numeric:true})
@@ -3946,7 +3985,7 @@ async function submitSponsorSale() {
 
         // 재고 업데이트
         // 새상품: 출고 시 이미 판매재고 차감됨 → 판매 시 추가 변동 없음
-        // 샘플: stock -qty (판매됨), sample_stock +qty (샘플 슬롯 해제)
+        // 샘플: stock -qty (판매됨), sample_stock +qty (매장 슬롯 해제)
         let stockMsg = '재고 변동 없음';
         if (!isNewProduct) {
             const { error: vErr } = await sb.from('variants').update({
@@ -3954,7 +3993,7 @@ async function submitSponsorSale() {
                 sample_stock: (vari.sample_stock || 0) + qty
             }).eq('id', variantId);
             if (vErr) throw vErr;
-            stockMsg = `재고 -${qty}, 샘플재고 +${qty}`;
+            stockMsg = `재고 -${qty}, 매장재고 +${qty}`;
         }
 
         bootstrap.Modal.getInstance(document.getElementById('sponsorSaleModal')).hide();
@@ -4037,7 +4076,7 @@ function updateVariantOptions() {
             const o = document.createElement('option');
             o.value = v.id;
             const stockToShow = isSample ? (v.sample_stock || 0) : isB ? (v.b_stock || 0) : v.stock;
-            const stockLabel  = isSample ? '샘플재고' : isB ? 'B급재고' : '재고';
+            const stockLabel  = isSample ? '매장재고' : isB ? 'B급재고' : '재고';
             o.textContent = `${v.color} / ${v.size}  (${stockLabel}: ${stockToShow}개)`;
             sel.appendChild(o);
         });
@@ -4073,7 +4112,7 @@ async function submitManualOrder() {
     vari[stockField] = newStock;
     await refreshOrders();
     updateVariantOptions();
-    const stockLabel = stockField === 'sample_stock' ? '샘플재고' : stockField === 'b_stock' ? 'B급재고' : '재고';
+    const stockLabel = stockField === 'sample_stock' ? '매장재고' : stockField === 'b_stock' ? 'B급재고' : '재고';
     showToast(`반영 완료! 현재 ${stockLabel}: ${newStock}개`);
     renderDashboard();
     renderHistory();
@@ -4718,7 +4757,7 @@ function _renderHistoryHtml(batchMapOrOrders, regularOrdersArg, showBulkCheck) {
         regularOrders = regularOrdersArg;
     }
     if (Object.keys(batchMap).length === 0 && regularOrders.length === 0) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
-    const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
+    const tl = { sale:'판매', store_sale:'매장판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'매장출고', sample_in:'매장입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
     const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline' };
     let html = '';
     const batchGroups = Object.values(batchMap).sort((a,b) => b.date.localeCompare(a.date));
@@ -4925,7 +4964,7 @@ function renderSponsorHistory() {
 // 묶음 이력과 개별 이력을 실제 시간순으로 한 목록에 표시
 function _renderUnifiedHistory(items, showBulkCheck) {
     if (!items.length) return '<div class="empty-state"><i class="fas fa-inbox"></i>이력이 없어요</div>';
-    const tl = { sale:'판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'샘플출고', sample_in:'샘플입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
+    const tl = { sale:'판매', store_sale:'매장판매', restock:'입고', return:'반품', cancel:'취소됨', sample_out:'매장출고', sample_in:'매장입고', sponsor_out:'협찬출고', sponsor_out_new:'협찬출고(새상품)', sponsor_in:'협찬회수', sponsor_sale:'협찬판매', b_sale:'B급판매', b_in:'B급입고' };
     const pc = { '카페24':'badge-cafe24','크림':'badge-kream','샘플라스':'badge-sampleas','오프라인':'badge-offline' };
     let html = '';
     let shownDate = null;
@@ -5007,7 +5046,7 @@ function renderHistory() {
     const sponsorBatchIds = new Set(_orders.filter(o => o.type === 'sponsor_out' || o.type === 'sponsor_out_new' || o.type === 'sponsor_in').map(o => o.batch_id).filter(Boolean));
     let orders = _orders.filter(o => o.type !== 'sponsor_out' && o.type !== 'sponsor_out_new' && o.type !== 'sponsor_in' && !(o.batch_id && sponsorBatchIds.has(o.batch_id)));
     if (pf) orders = orders.filter(o => o.platform === pf);
-    if (tf === 'sample')  orders = orders.filter(o => o.type === 'sample_out' || o.type === 'sample_in');
+    if (tf === 'sample')  orders = orders.filter(o => o.type === 'store_sale' || o.type === 'sample_out' || o.type === 'sample_in');
     else if (tf) orders = orders.filter(o => o.type === tf);
 
     // 배치 묶음 + 개별 주문을 날짜 기준 통합 목록으로 만들어 페이지네이션
@@ -5074,8 +5113,8 @@ function _seasonRank(season) {
     return parseInt(m[1], 10) * 10 + seasonOrder[m[2].toUpperCase()];
 }
 
-function _isDeduct(type) { return ['sale','sample_out','sponsor_out','sponsor_out_new','b_sale'].includes(type); }
-function _isSampleType(type) { return ['sample_out','sample_in','sponsor_out','sponsor_in'].includes(type); }
+function _isDeduct(type) { return ['sale','store_sale','sample_out','sponsor_out','sponsor_out_new','b_sale'].includes(type); }
+function _isSampleType(type) { return ['store_sale','sample_out','sample_in','sponsor_out','sponsor_in'].includes(type); }
 function _isBType(type) { return ['b_sale','b_in'].includes(type); }
 function _stockField(type) {
     if (_isSampleType(type)) return 'sample_stock';
@@ -5085,6 +5124,7 @@ function _stockField(type) {
 function _typeBadge(type) {
     if (type === 'cancel') return 'bg-secondary';
     if (type === 'sale') return 'bg-danger';
+    if (type === 'store_sale') return 'bg-danger';
     if (type === 'sample_out') return 'bg-purple';
     if (type === 'sample_in') return 'bg-purple';
     if (type === 'sponsor_out' || type === 'sponsor_out_new') return 'bg-warning text-dark';
