@@ -372,6 +372,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="page-title mb-0">상품 관리</div>
             <div class="d-flex gap-2">
+                <button class="btn btn-outline-danger" onclick="resetAllStoreStock()"><i class="fas fa-rotate-left me-1"></i> 매장재고 전체 0</button>
                 <button class="btn btn-accent" data-bs-toggle="modal" data-bs-target="#addProductModal">
                     <i class="fas fa-plus me-1"></i> 상품 추가
                 </button>
@@ -699,9 +700,9 @@
                         <input type="date" class="form-control" id="batch-date">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">새제품 출고</label>
+                        <label class="form-label">새제품 출고 표시</label>
                         <div class="p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:600;line-height:1.4">
-                            상품을 담은 뒤 출고 목록에서<br><b>🆕 새제품 출고</b>로 바꿀 수 있어요.
+                            출고 자체로는 재고가 변하지 않아요.<br><b>판매 버튼을 눌렀을 때만 판매재고가 차감</b>돼요.
                         </div>
                         <input type="hidden" id="sq-source" value="sample">
                     </div>
@@ -867,7 +868,7 @@
                 <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="background:#fff7ed;border:1px solid #fed7aa"><div class="fw-bold" style="color:#c2410c">판매 또는 입고를 직접 반영할 때</div><div class="mt-2" style="font-size:12px;color:#52525b">주문 반영 → 빠른 입력 → 판매/입고 선택 → 판매재고/매장재고 선택 → 상품·컬러·사이즈 → 수량 입력 → 재고 반영</div></div></div>
                 <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="fw-bold" style="color:#1d4ed8">엑셀 주문서로 여러 건 반영할 때</div><div class="mt-2" style="font-size:12px;color:#52525b">주문 반영 → 엑셀 주문서 → 판매 또는 입고 선택 → 양식 업로드 → 상품 매칭 확인 → 재고 반영</div></div></div>
                 <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="background:#fff7ed;border:1px solid #fdba74"><div class="fw-bold" style="color:#c2410c">오프라인 매장에서 판매할 때</div><div class="mt-2" style="font-size:12px;color:#52525b">오프라인 매장 → 상품·컬러·사이즈 선택 → 수량과 결제수단 확인 → 판매 완료. 매장재고에서 자동 차감됩니다.</div></div></div>
-                <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="background:#faf5ff;border:1px solid #e9d5ff"><div class="fw-bold" style="color:#7e22ce">협찬을 출고하고 회수할 때</div><div class="mt-2" style="font-size:12px;color:#52525b">협찬 관리 → 협찬명 입력 → 상품을 묶음으로 출고 → 회수 탭에서 해당 묶음 선택 → 회수 수량 확인 후 반영</div></div></div>
+                <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="background:#faf5ff;border:1px solid #e9d5ff"><div class="fw-bold" style="color:#7e22ce">협찬을 출고하고 회수할 때</div><div class="mt-2" style="font-size:12px;color:#52525b">출고·회수는 이력만 기록하고 재고는 바뀌지 않습니다. 협찬 상품의 판매 버튼을 눌렀을 때만 판매재고에서 수량만큼 차감됩니다.</div></div></div>
             </div>
         </div>
 
@@ -2816,6 +2817,36 @@ document.getElementById('addProductModal').addEventListener('show.bs.modal', () 
 });
 
 let _editVariantId = null;
+
+async function resetAllStoreStock() {
+    const targets = _variants.filter(v => (v.sample_stock || 0) !== 0);
+    if (!targets.length) { showToast('모든 매장재고가 이미 0이에요.'); return; }
+    const total = targets.reduce((sum, v) => sum + Math.abs(v.sample_stock || 0), 0);
+    if (!confirm(`매장재고 ${targets.length}개 옵션을 모두 0으로 바꿀까요?\n총 ${total}개의 매장재고 값이 초기화됩니다.`)) return;
+    showLoading('매장재고를 0으로 변경 중...');
+    try {
+        for (const v of targets) {
+            const previous = v.sample_stock || 0;
+            const { error } = await sb.from('variants').update({ sample_stock: 0 }).eq('id', v.id);
+            if (error) throw error;
+            v.sample_stock = 0;
+            const history = await sb.from('orders').insert({
+                date: new Date().toISOString().slice(0,10), platform: '직접수정',
+                product_id: v.product_id, variant_id: v.id, quantity: Math.abs(previous),
+                type: previous > 0 ? 'sample_out' : 'sample_in', memo: '매장재고 전체 0 초기화'
+            });
+            if (history.error) console.warn('매장재고 초기화 이력 저장 실패', history.error);
+        }
+        await refreshOrders();
+        renderProducts(); renderDashboard(); renderHistory();
+        showToast(`매장재고 ${targets.length}개 옵션을 모두 0으로 변경했어요.`);
+    } catch (e) {
+        console.error(e);
+        await refreshVariants();
+        renderProducts();
+        showToast('변경 중 오류가 발생했어요. 현재 값을 다시 확인해주세요.', 'danger');
+    } finally { hideLoading(); }
+}
 let _editField = 'stock'; // 'stock' or 'sample_stock'
 function openEditStock(variantId, pname, color, size, stock, field = 'stock') {
     _editVariantId = variantId;
@@ -2978,11 +3009,11 @@ function initSponsorQuick(){
     document.getElementById('sq-search').value=_sponsorQuickSearch;updateSponsorSourceUI();
 }
 function _sponsorQuickSource(){return document.getElementById('sq-source')?.value||'sample';}
-function _sponsorQuickStock(v,source=_sponsorQuickSource()){return source==='new'?(v.stock||0):(v.sample_stock||0);}
-function _sponsorQuickLabel(source=_sponsorQuickSource()){return source==='new'?'새제품 재고':'매장 재고';}
+function _sponsorQuickStock(v){return v.stock||0;}
+function _sponsorQuickLabel(){return '판매재고';}
 function updateSponsorSourceUI(){
     const isNew=_sponsorQuickSource()==='new',help=document.getElementById('sq-source-help'),select=document.getElementById('sq-source');
-    if(help){help.textContent=isNew?'🆕 판매재고에서 차감':'매장재고에서 차감';help.style.color=isNew?'#2563eb':'#7c3aed';}
+    if(help){help.textContent='출고 시 재고 변동 없음';help.style.color=isNew?'#2563eb':'#7c3aed';}
     if(select){select.style.borderColor=isNew?'#60a5fa':'#c4b5fd';select.style.background=isNew?'#eff6ff':'#faf5ff';}
     renderSponsorQuick();
 }
@@ -3012,13 +3043,13 @@ function clearSponsorQuickCart(){if(_sponsorQuickCart.length&&!confirm('출고 �
 function renderSponsorQuickCart(){
     const el=document.getElementById('sq-cart');_sponsorQuickCart=_sponsorQuickCart.filter(x=>_variants.some(v=>v.id===x.variantId));const total=_sponsorQuickCart.reduce((s,x)=>s+x.qty,0);document.getElementById('sq-total').textContent=`${total}개`;document.getElementById('sq-submit').disabled=!total;
     if(!total){el.innerHTML='<div class="empty-state" style="padding:35px 5px"><i class="fas fa-box-open"></i>사이즈 버튼을 눌러 담으세요</div>';return;}
-    el.innerHTML=_sponsorQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id),isNew=item.source==='new',sourceLabel=isNew?'🆕 새제품 출고':'매장제품 출고';return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeSponsorQuickItem('${item.variantId}','${item.source}')"><i class="fas fa-times"></i></button></div><button class="btn btn-sm w-100 mt-2" style="font-size:11px;font-weight:700;border:1px solid ${isNew?'#60a5fa':'#c4b5fd'};background:${isNew?'#eff6ff':'#faf5ff'};color:${isNew?'#1d4ed8':'#7c3aed'}" onclick="toggleSponsorQuickSource('${item.variantId}','${item.source}')">${sourceLabel} <span style="font-weight:400;opacity:.75">· 눌러서 변경</span></button><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',1)">+</button></div></div>`;}).join('');
+    el.innerHTML=_sponsorQuickCart.map(item=>{const v=_variants.find(x=>x.id===item.variantId),p=_products.find(x=>x.id===v?.product_id),isNew=item.source==='new',sourceLabel=isNew?'🆕 새제품 출고 표시':'일반 협찬 출고';return `<div style="padding:11px 0;border-bottom:1px solid #f4f4f5"><div class="d-flex justify-content-between gap-2"><div><div style="font-size:13px;font-weight:700">${_html(p?.name||'삭제된 상품')}</div><div style="font-size:11px;color:#71717a;margin-top:3px">${_html(v?.color||'')} / ${_html(v?.size||'')}</div></div><button class="btn btn-sm p-0 text-danger" onclick="removeSponsorQuickItem('${item.variantId}','${item.source}')"><i class="fas fa-times"></i></button></div><button class="btn btn-sm w-100 mt-2" style="font-size:11px;font-weight:700;border:1px solid ${isNew?'#60a5fa':'#c4b5fd'};background:${isNew?'#eff6ff':'#faf5ff'};color:${isNew?'#1d4ed8':'#7c3aed'}" onclick="toggleSponsorQuickSource('${item.variantId}','${item.source}')">${sourceLabel} <span style="font-weight:400;opacity:.75">· 재고 변동 없음 · 눌러서 변경</span></button><div class="d-flex align-items-center justify-content-end gap-2 mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',-1)">−</button><b style="min-width:24px;text-align:center">${item.qty}</b><button class="btn btn-outline-secondary btn-sm" onclick="changeSponsorQuickQty('${item.variantId}','${item.source}',1)">+</button></div></div>`;}).join('');
 }
 async function submitSponsorQuick(){
     const batchName=document.getElementById('batch-name').value.trim(),date=document.getElementById('batch-date').value;if(!batchName){showToast('묶음 이름을 입력하세요','danger');return;}if(!date){showToast('날짜를 선택하세요','danger');return;}if(!_sponsorQuickCart.length)return;
     const total=_sponsorQuickCart.reduce((s,x)=>s+x.qty,0);if(!confirm(`"${batchName}" 협찬 ${total}개를 출고할까요?`))return;showLoading('협찬 묶음 출고 중...');
     const batchId=uid(),rows=[];
-    try{for(const item of _sponsorQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const field=item.source==='new'?'stock':'sample_stock',type=item.source==='new'?'sponsor_out_new':'sponsor_out',next=(v[field]||0)-item.qty;const vr=await sb.from('variants').update({[field]:next}).eq('id',v.id);if(vr.error)throw vr.error;v[field]=next;rows.push({date,platform:'협찬',product_id:v.product_id,variant_id:v.id,quantity:item.qty,type,memo:batchName,batch_id:batchId,batch_name:batchName});}const or=await sb.from('orders').insert(rows);if(or.error)throw or.error;_sponsorQuickCart=[];document.getElementById('batch-name').value='';await refreshOrders();renderSponsorQuick();renderDashboard();renderSponsorHistory();showToast(`"${batchName}" 협찬 ${total}개가 출고됐어요.`);}catch(e){console.error(e);showToast('출고 중 오류가 발생했어요. 이력을 확인해주세요.','danger');await refreshProducts();await refreshOrders();renderSponsorQuick();}hideLoading();
+    try{for(const item of _sponsorQuickCart){const v=_variants.find(x=>x.id===item.variantId);if(!v)continue;const type=item.source==='new'?'sponsor_out_new':'sponsor_out';rows.push({date,platform:'협찬',product_id:v.product_id,variant_id:v.id,quantity:item.qty,type,memo:batchName,batch_id:batchId,batch_name:batchName});}const or=await sb.from('orders').insert(rows);if(or.error)throw or.error;_sponsorQuickCart=[];document.getElementById('batch-name').value='';await refreshOrders();renderSponsorQuick();renderDashboard();renderSponsorHistory();showToast(`"${batchName}" 협찬 ${total}개가 출고됐어요. 재고는 변경되지 않았어요.`);}catch(e){console.error(e);showToast('출고 중 오류가 발생했어요. 이력을 확인해주세요.','danger');await refreshOrders();renderSponsorQuick();}hideLoading();
 }
 
 function initSponsor() {
@@ -3148,7 +3179,6 @@ function onBatchReturnSelect() {
     activeOrders.forEach(o => {
         const prod = _products.find(p => p.id === o.product_id);
         const vari = _variants.find(v => v.id === o.variant_id);
-        const sampleStock = vari ? (vari.sample_stock || 0) : 0;
         const partialLabel = o.alreadyReturned > 0
             ? `<span style="font-size:11px;color:#f59e0b">  (이미 ${o.alreadyReturned}개 회수됨)</span>` : '';
         html += `<div class="d-flex align-items-center gap-3 p-2 mb-2 rounded"
@@ -3162,7 +3192,7 @@ function onBatchReturnSelect() {
                 <div style="font-size:12px;color:#71717a">${vari?vari.color+' / '+vari.size:'—'}</div>
             </div>
             <div style="font-size:12px;color:#8b5cf6;white-space:nowrap">출고 ${o.quantity}개</div>
-            <div style="font-size:11px;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:6px;white-space:nowrap">매장재고 ${sampleStock}개</div>
+            <div style="font-size:11px;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:6px;white-space:nowrap">재고 변동 없음</div>
             <div class="d-flex align-items-center gap-1" id="rqty-wrap-${o.id}">
                 <span style="font-size:12px;color:#52525b">회수</span>
                 <input type="number" class="form-control form-control-sm"
@@ -3206,20 +3236,12 @@ async function submitBatchReturn() {
     const returnBatchId   = uid();
     const returnBatchName = `${batchName} 회수${memo ? ' — ' + memo : ''}`;
 
-    const variantSampleDelta = {}; // 매장재고 복구 (일반 협찬)
-    const variantStockDelta  = {}; // 판매재고 복구 (새상품 협찬)
     const orderInserts = [];
 
     checked.forEach(cb => {
         const qty = parseInt(document.getElementById('rqty-' + cb.dataset.orderId)?.value) || 0;
         if (qty <= 0) return;
         const variantId = cb.dataset.variantId;
-        // 원본 출고가 새상품이었는지 확인
-        const origOut = _orders.find(o => o.batch_id === batchId && o.variant_id === variantId &&
-            (o.type === 'sponsor_out' || o.type === 'sponsor_out_new'));
-        const isNew = origOut?.type === 'sponsor_out_new';
-        if (isNew) variantStockDelta[variantId]  = (variantStockDelta[variantId]  || 0) + qty;
-        else       variantSampleDelta[variantId] = (variantSampleDelta[variantId] || 0) + qty;
         orderInserts.push({
             date, platform: '협찬',
             product_id: cb.dataset.productId, variant_id: variantId,
@@ -3233,25 +3255,10 @@ async function submitBatchReturn() {
     if (orderInserts.length === 0) { showToast('수량을 확인하세요', 'danger'); return; }
 
     showLoading(`${orderInserts.length}건 회수 반영 중...`);
-    const variantUpdates = [
-        ...Object.entries(variantSampleDelta).map(([variantId, delta]) => {
-            const vari = _variants.find(v => v.id === variantId);
-            if (!vari) return Promise.resolve();
-            vari.sample_stock = (vari.sample_stock || 0) + delta;
-            return sb.from('variants').update({ sample_stock: vari.sample_stock }).eq('id', variantId);
-        }),
-        ...Object.entries(variantStockDelta).map(([variantId, delta]) => {
-            const vari = _variants.find(v => v.id === variantId);
-            if (!vari) return Promise.resolve();
-            vari.stock = (vari.stock || 0) + delta;
-            return sb.from('variants').update({ stock: vari.stock }).eq('id', variantId);
-        }),
-    ];
-
-    await Promise.all([...variantUpdates, sb.from('orders').insert(orderInserts)]);
+    await sb.from('orders').insert(orderInserts);
     hideLoading();
 
-    showToast(`"${returnBatchName}" ${orderInserts.length}건 회수 완료!`);
+    showToast(`"${returnBatchName}" ${orderInserts.length}건 회수 완료. 재고는 변경되지 않았어요.`);
     document.getElementById('return-batch-select').value = '';
     document.getElementById('return-items').innerHTML =
         '<div class="text-muted small text-center py-3">위에서 협찬 묶음을 선택하면 출고 내역이 표시돼요</div>';
@@ -3752,11 +3759,7 @@ async function submitBatchOrder() {
     if (!date)      { showToast('날짜를 선택하세요', 'danger'); return; }
 
     const batchId = uid();
-    const variantDelta = {};
     const orderInserts = [];
-
-    const variantSampleDelta = {}; // 매장재고 차감
-    const variantStockDelta  = {}; // 판매재고 차감 (새상품)
 
     document.querySelectorAll('#batch-items > div').forEach(row => {
         const rowId = row.id.replace('bir-', '');
@@ -3766,8 +3769,6 @@ async function submitBatchOrder() {
         const isNew = document.getElementById('bnew-' + rowId)?.checked || false;
         if (!productId || !variantId || qty <= 0) return;
         const type = isNew ? 'sponsor_out_new' : 'sponsor_out';
-        if (isNew) variantStockDelta[variantId]  = (variantStockDelta[variantId]  || 0) - qty;
-        else       variantSampleDelta[variantId] = (variantSampleDelta[variantId] || 0) - qty;
         orderInserts.push({ date, platform:'협찬', product_id:productId, variant_id:variantId,
             quantity:qty, type, memo:batchName, batch_id:batchId, batch_name:batchName });
     });
@@ -3775,23 +3776,9 @@ async function submitBatchOrder() {
     if (orderInserts.length === 0) { showToast('상품을 하나 이상 추가하세요', 'danger'); return; }
 
     showLoading(`협찬 묶음 ${orderInserts.length}건 반영 중...`);
-    const variantUpdates = [
-        ...Object.entries(variantSampleDelta).map(([variantId, delta]) => {
-            const vari = _variants.find(v => v.id === variantId);
-            if (!vari) return Promise.resolve();
-            vari.sample_stock = (vari.sample_stock || 0) + delta;
-            return sb.from('variants').update({ sample_stock: vari.sample_stock }).eq('id', variantId);
-        }),
-        ...Object.entries(variantStockDelta).map(([variantId, delta]) => {
-            const vari = _variants.find(v => v.id === variantId);
-            if (!vari) return Promise.resolve();
-            vari.stock = (vari.stock || 0) + delta;
-            return sb.from('variants').update({ stock: vari.stock }).eq('id', variantId);
-        }),
-    ];
-    await Promise.all([...variantUpdates, sb.from('orders').insert(orderInserts)]);
+    await sb.from('orders').insert(orderInserts);
     hideLoading();
-    showToast(`"${batchName}" 협찬 묶음 ${orderInserts.length}건 반영됐어요!`);
+    showToast(`"${batchName}" 협찬 묶음 ${orderInserts.length}건 반영됐어요. 재고는 변경되지 않았어요.`);
     // 폼 초기화
     document.getElementById('batch-name').value = '';
     document.getElementById('batch-items').innerHTML = '';
@@ -3806,9 +3793,9 @@ async function cancelBatch(batchId) {
     const batchOrders = _orders.filter(o => o.batch_id === batchId && o.type !== 'cancel');
     if (batchOrders.length === 0) return;
     const batchName = batchOrders[0].batch_name || batchId;
-    const isSponsor = batchOrders.some(o => _isSampleType(o.type));
-    const stockLabel = isSponsor ? '매장 재고' : '판매 재고';
-    if (!confirm(`"${batchName}" 묶음 ${batchOrders.length}건을 취소할까요?\n${stockLabel}가 원상복구돼요.`)) return;
+    const noStockBatch = batchOrders.every(o => _isNoStockType(o.type));
+    const stockLabel = '재고';
+    if (!confirm(`"${batchName}" 묶음 ${batchOrders.length}건을 취소할까요?\n${noStockBatch?'이력만 취소되고 재고는 변경되지 않아요.':'재고가 원상복구돼요.'}`)) return;
 
     showLoading('묶음 취소 처리 중...');
     // 재고 필드별로 delta 분리 (stock / sample_stock / b_stock)
@@ -3817,6 +3804,12 @@ async function cancelBatch(batchId) {
     const variantBDelta = {};
     const orderUpdates = [];
     batchOrders.forEach(o => {
+        if (_isNoStockType(o.type)) {
+            orderUpdates.push(sb.from('orders').update({ type:'cancel', memo:`[취소] ${o.memo||''}`.trim(), external_order_id: null }).eq('id', o.id));
+            const idx = _orders.findIndex(x => x.id === o.id);
+            if (idx !== -1) { _orders[idx].type = 'cancel'; _orders[idx].memo = `[취소] ${o.memo||''}`.trim(); }
+            return;
+        }
         const delta = _isDeduct(o.type) ? o.quantity : -o.quantity;
         if (o.variant_id) {
             if (_isSampleType(o.type)) {
@@ -3855,7 +3848,7 @@ async function cancelBatch(batchId) {
     hideLoading();
     renderHistory();
     renderDashboard();
-    showToast(`"${batchName}" 묶음 취소 완료. ${stockLabel} 원상복구됐어요.`);
+    showToast(`"${batchName}" 묶음 취소 완료. ${noStockBatch?'재고는 변경되지 않았어요.':stockLabel+'가 원상복구됐어요.'}`);
 }
 
 // ── 묶음 부분 수정 ───────────────────────────────────────
@@ -3874,11 +3867,12 @@ async function partialCancelBatchOrder(orderId) {
         showToast(`1~${o.quantity} 사이의 수량을 입력하세요`, 'danger');
         return;
     }
-    if (!confirm(`${qty}개를 부분 취소할까요?\n해당 재고가 ${qty}개 원상복구됩니다.`)) return;
+    const noStock = _isNoStockType(o.type);
+    if (!confirm(`${qty}개를 부분 취소할까요?\n${noStock?'이력만 취소되고 재고는 변경되지 않아요.':`해당 재고가 ${qty}개 원상복구됩니다.`}`)) return;
 
     showLoading('부분 취소 처리 중...');
     const updates = [];
-    if (vari) {
+    if (vari && !noStock) {
         const field = _stockField(o.type);
         const delta = _isDeduct(o.type) ? qty : -qty;
         const next = (vari[field] || 0) + delta;
@@ -3950,23 +3944,26 @@ async function submitBatchAdd() {
     const vari = _variants.find(v => v.id === variantId);
     if (!vari) { showToast('상품 옵션을 찾을 수 없어요', 'danger'); return; }
     const field = _stockField(_batchAddCtx.type);
+    const noStock = _isNoStockType(_batchAddCtx.type);
     const delta = _isDeduct(_batchAddCtx.type) ? -qty : qty;
     const next = (vari[field] || 0) + delta;
     if (!confirm(`${_batchAddCtx.batchName} 묶음에 ${qty}개를 추가할까요?`)) return;
 
     showLoading('묶음에 항목 추가 중...');
-    const { error: stockError } = await sb.from('variants').update({ [field]: next }).eq('id', variantId);
-    if (stockError) { hideLoading(); showToast('재고 변경 실패: '+stockError.message, 'danger'); return; }
+    if (!noStock) {
+        const { error: stockError } = await sb.from('variants').update({ [field]: next }).eq('id', variantId);
+        if (stockError) { hideLoading(); showToast('재고 변경 실패: '+stockError.message, 'danger'); return; }
+    }
     const { error: orderError } = await sb.from('orders').insert({
         date: _batchAddCtx.date, platform: _batchAddCtx.platform, product_id: productId, variant_id: variantId,
         quantity: qty, type: _batchAddCtx.type, memo: `[묶음추가] ${_batchAddCtx.memo}`.trim(),
         batch_id: _batchAddCtx.batchId, batch_name: _batchAddCtx.batchName
     });
     if (orderError) {
-        await sb.from('variants').update({ [field]: vari[field] || 0 }).eq('id', variantId);
+        if (!noStock) await sb.from('variants').update({ [field]: vari[field] || 0 }).eq('id', variantId);
         hideLoading(); showToast('항목 추가 실패: '+orderError.message, 'danger'); return;
     }
-    vari[field] = next;
+    if (!noStock) vari[field] = next;
     bootstrap.Modal.getInstance(document.getElementById('batchAddModal'))?.hide();
     await refreshOrders();
     hideLoading();
@@ -3998,11 +3995,6 @@ async function submitSponsorSale() {
     const vari = _variants.find(v => v.id === variantId);
     if (!vari) { showToast('variant를 찾을 수 없어요', 'error'); return; }
 
-    // 원본 출고가 새상품이었는지 확인
-    const origOut = _orders.find(o => o.batch_id === batchId && o.variant_id === variantId &&
-        (o.type === 'sponsor_out' || o.type === 'sponsor_out_new'));
-    const isNewProduct = origOut?.type === 'sponsor_out_new';
-
     showLoading('협찬 판매 반영 중...');
     try {
         // 주문 기록 추가
@@ -4013,23 +4005,16 @@ async function submitSponsorSale() {
         }]);
         if (oErr) throw oErr;
 
-        // 재고 업데이트
-        // 새상품: 출고 시 이미 판매재고 차감됨 → 판매 시 추가 변동 없음
-        // 샘플: stock -qty (판매됨), sample_stock +qty (매장 슬롯 해제)
-        let stockMsg = '재고 변동 없음';
-        if (!isNewProduct) {
-            const { error: vErr } = await sb.from('variants').update({
-                stock: (vari.stock || 0) - qty,
-                sample_stock: (vari.sample_stock || 0) + qty
-            }).eq('id', variantId);
-            if (vErr) throw vErr;
-            stockMsg = `재고 -${qty}, 매장재고 +${qty}`;
-        }
+        // 협찬 판매 확정 시에만 판매재고에서 차감합니다.
+        const nextStock = (vari.stock || 0) - qty;
+        const { error: vErr } = await sb.from('variants').update({ stock: nextStock }).eq('id', variantId);
+        if (vErr) throw vErr;
+        vari.stock = nextStock;
 
         bootstrap.Modal.getInstance(document.getElementById('sponsorSaleModal')).hide();
         await loadAllData();
         renderSponsorHistory();
-        showToast(`판매 반영 완료 — ${stockMsg}`, 'success');
+        showToast(`판매 반영 완료 — 판매재고 -${qty}`, 'success');
     } catch(e) {
         showToast('오류: ' + e.message, 'error');
     } finally {
@@ -5143,8 +5128,9 @@ function _seasonRank(season) {
     return parseInt(m[1], 10) * 10 + seasonOrder[m[2].toUpperCase()];
 }
 
-function _isDeduct(type) { return ['sale','store_sale','sample_out','sponsor_out','sponsor_out_new','b_sale'].includes(type); }
-function _isSampleType(type) { return ['store_sale','sample_out','sample_in','sponsor_out','sponsor_in'].includes(type); }
+function _isDeduct(type) { return ['sale','store_sale','sample_out','sponsor_sale','b_sale'].includes(type); }
+function _isSampleType(type) { return ['store_sale','sample_out','sample_in'].includes(type); }
+function _isNoStockType(type) { return ['sponsor_out','sponsor_out_new','sponsor_in'].includes(type); }
 function _isBType(type) { return ['b_sale','b_in'].includes(type); }
 function _stockField(type) {
     if (_isSampleType(type)) return 'sample_stock';
@@ -5246,7 +5232,8 @@ async function cancelOrder(orderId) {
     const prod = _products.find(p => p.id === o.product_id);
     const label = prod ? `${prod.name}${vari ? ' ' + vari.color + '/' + vari.size : ''}` : '이 항목';
 
-    if (!confirm(`"${label}" ${o.quantity}개 반영을 취소할까요?\n재고가 원상복구돼요.`)) return;
+    const noStock = _isNoStockType(o.type);
+    if (!confirm(`"${label}" ${o.quantity}개 반영을 취소할까요?\n${noStock?'이력만 취소되고 재고는 변경되지 않아요.':'재고가 원상복구돼요.'}`)) return;
 
     showLoading('취소 처리 중...');
 
@@ -5255,7 +5242,7 @@ async function cancelOrder(orderId) {
     const stockField = _stockField(o.type);
     const updates = [];
 
-    if (vari) {
+    if (vari && !noStock) {
         const currentStock = vari[stockField] || 0;
         const restoredStock = currentStock + stockDelta;
         updates.push(sb.from('variants').update({ [stockField]: restoredStock }).eq('id', vari.id));
@@ -5274,7 +5261,7 @@ async function cancelOrder(orderId) {
 
     renderHistory();
     renderDashboard();
-    showToast('취소됐어요. 재고가 원상복구됐어요.');
+    showToast(noStock?'취소됐어요. 재고는 변경되지 않았어요.':'취소됐어요. 재고가 원상복구됐어요.');
 }
 
 // =====================
